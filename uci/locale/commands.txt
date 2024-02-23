@@ -1,0 +1,11 @@
+UCI          uci
+ISREADY      isready
+DEBUG        debug
+SETOPTION    setoption
+REGISTER     register
+UCINEWGAME   ucinewgame
+POSITION     position
+GO           go
+STOP         stop
+PONDERHIT    ponderhit
+QUIT         quit

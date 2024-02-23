@@ -1,0 +1,8 @@
+ID               id
+UCIOK            uciok
+READYOK          readyok
+BESTMOVE         bestmove
+COPYPROTECTION   copyprotection
+REGISTRATION     registration
+INFO             info
+OPTION           option
