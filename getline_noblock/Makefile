@@ -19,7 +19,8 @@ objects = $(OBJ_DIR)/getline_noblock.o
 build: $(objects)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(headers)
+	@mkdir -p $(OBJ_DIR)
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 clean:
-	$(RM) $(OBJ_DIR)/*
+	$(RM) -R $(OBJ_DIR)

@@ -1,6 +1,7 @@
 headers=locale/commands.h locale/responses.h
 build: $(headers)
 $(headers): generate_locale.py commands.txt responses.txt
+	@mkdir -p ./locale
 	python3 generate_locale.py
 clean:
-	$(RM) $(headers)
+	$(RM) -R ./locale
