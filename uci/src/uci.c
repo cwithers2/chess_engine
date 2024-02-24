@@ -4,8 +4,8 @@
 #include <debug.h>
 #include <getline_noblock.h>
 #include <uci.h>
-#include <commands.h>
-#include <responses.h>
+#include <src/commands.h>
+#include <src/responses.h>
 
 /** DEFINITIONS :) **/
 #define _whitespace ' ':case '\t':case '\n'

@@ -34,7 +34,9 @@ void uci_destroy();
  *    Returns the number of tokens sent by the UI.
  * argv : char***
  *    Returns the tokens sent by the UI.
- * 
+ *
+ * NOTE: On success, *argv[0] is guaranteed to be a token from uci/locale/locale/commands.h
+ *
  * Returns
  * -------
  * int:
@@ -55,6 +57,8 @@ int uci_poll(int* argc, char*** argv);
  *    The number of tokens being sent to the UI.
  * argv : char**
  *    The tokens to send to the UI.
+ *
+ * NOTE: see uci/locale/locale/response.h for valid response tokens.
  *
  * Returns
  * -------

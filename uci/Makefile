@@ -6,7 +6,7 @@ OBJ_DIR := ./obj
 #directories
 GETLINE  = ../getline_noblock/include
 UTIL     = ../util
-LOCALE   = ./locale/locale
+LOCALE   = locale
 INCLUDES = -I$(INC_DIR) -I$(GETLINE) -I$(UTIL) -I$(LOCALE)
 
 CC      := g++
@@ -15,7 +15,7 @@ CFLAGS  := $(CFLAGS) $(INCLUDES)
 RM      := $(RM)
 
 #files
-headers  = $(INC_DIR)/uci.h $(GETLINE)/getline_noblock.h $(UTIL)/debug.h $(LOCALE)/commands.h $(LOCALE)/responses.h
+headers  = $(INC_DIR)/uci.h $(GETLINE)/getline_noblock.h $(UTIL)/debug.h $(LOCALE)/src/commands.h $(LOCALE)/src/responses.h
 sources  = $(SRC_DIR)/uci.c
 objects  = $(OBJ_DIR)/uci.o
 
