@@ -12,15 +12,14 @@ CFLAGS  := $(CFLAGS) $(INCLUDES)
 RM      := $(RM)
 
 #files
-headers = $(INC_DIR)/getline_noblock.h
-sources = $(SRC_DIR)/getline_noblock.c
-objects = $(OBJ_DIR)/getline_noblock.o
+HEADERS = $(INC_DIR)/getline_noblock.h
+OBJECTS = $(OBJ_DIR)/getline_noblock.o
 
-build: $(objects)
+build: $(OBJECTS)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(headers)
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
 	@mkdir -p $(OBJ_DIR)
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@
 
 clean:
 	$(RM) -R $(OBJ_DIR)

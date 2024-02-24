@@ -9,22 +9,26 @@ UTIL     = ../util
 LOCALE   = locale
 INCLUDES = -I$(INC_DIR) -I$(GETLINE) -I$(UTIL) -I$(LOCALE)
 
-CC      := g++
-CFLAGS  := $(CFLAGS) $(INCLUDES) 
+CC      := gcc
+CFLAGS  := $(CFLAGS) $(INCLUDES)
 
 RM      := $(RM)
 
 #files
-headers  = $(INC_DIR)/uci.h $(GETLINE)/getline_noblock.h $(UTIL)/debug.h $(LOCALE)/src/commands.h $(LOCALE)/src/responses.h
-sources  = $(SRC_DIR)/uci.c
-objects  = $(OBJ_DIR)/uci.o
+HEADERS  = $(INC_DIR)/uci.h $(GETLINE)/getline_noblock.h $(UTIL)/debug.h $(LOCALE)/src/commands.h $(LOCALE)/src/responses.h
+OBJECTS  = $(OBJ_DIR)/uci.o ../getline_noblock/obj/getline_noblock.o
 
+TARGET   = libuci.a
 
-build: $(objects)
+build: $(TARGET)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(headers)
+$(TARGET): $(OBJECTS)
+	ar rcs $(TARGET) $(OBJECTS)
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
 	@mkdir -p $(OBJ_DIR)
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@
 
 clean:
+	$(RM) $(TARGET)
 	$(RM) -R $(OBJ_DIR)
