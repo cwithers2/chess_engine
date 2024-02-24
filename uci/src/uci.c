@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <string.h>
-#include <threads.h>
 
 #include <debug.h>
 #include <getline_noblock.h>
@@ -9,98 +8,38 @@
 #include <responses.h>
 
 /** DEFINITIONS :) **/
-
-#ifndef NO_DEBUG
-#define UCI_THREAD_COOLDOWN_S 2
-#else
-#define UCI_THREAD_COOLDOWN_S 0
-#endif
-
 #define _whitespace ' ':case '\t':case '\n'
 #define _is_keyword(kw, val) (strcmp(kw, val) == 0)
+typedef struct ParseData ParseData;
 
-typedef struct Tokens Tokens;
-typedef struct QueueNode QueueNode;
-
-/** DATA TYPES :) **/
-struct QueueNode{
-	QueueNode* next;
-	char** argv;
+/** DATA STRUCTURES :) **/
+struct ParseData{
 	int argc;
-	int garbage;
-};
-
-struct UCIObject{
-	int exit;
-	thrd_t thread;
-	QueueNode head;
-	QueueNode* last;
-	mtx_t modify;
-};
-
-enum GarbageStatus{
-	GARBAGE_WAITING = 0,
-	GARBAGE_IN_USE,
-	GARBAGE_EXPIRED
+	char** argv;
 };
 
 /** PRIVATE FORWARD DECLARATIONS :) **/
-int work_thread(void* arg);
-void push(UCIObject* uci, QueueNode* node);
-QueueNode* pop(UCIObject* uci);
+void free_vector(int argc, char** argv);
+void free_parsedata(ParseData* data);
 int valid_command(char* value);
 int valid_response(char* value);
-void free_vector(char** argv, int argc);
-void free_node(QueueNode* node);
-void cooldown();
-QueueNode* next_clean_node(UCIObject* uci);
 int is_whitespace(const char ch);
-void lock(UCIObject* uci);
-void unlock(UCIObject* uci);
-QueueNode* create_node(char* buffer);
-void collect_garbage(UCIObject* uci);
+int count_tokens(char* buffer);
+int copy_tokens(ParseData* data, char* buffer);
+int parse(char* buffer, ParseData* data);
 
 /** PUBILC LIBRARY FUNCTIONS :) **/
-UCIObject* uci_init(){
+int uci_init(){
 	int result;
-	UCIObject* uci;
-	getline_noblock_init();
-	uci = (UCIObject*)calloc(1, sizeof(UCIObject)); /** CALLOC **/
-	if (!uci)
-		goto ERROR_ALLOC;
-	result = mtx_init(&(uci->modify), mtx_plain|mtx_recursive);
-	if(result != thrd_success)
-		goto ERROR_MUTEX;
-
-	result = thrd_create(&(uci->thread), work_thread, uci);
-	if(result != thrd_success)
-		goto ERROR_THREAD;
-
-	return uci;
-
-	ERROR_THREAD:
-	ERROR_MUTEX:
-	free(uci);
-	ERROR_ALLOC:
-	return NULL;
+	result = getline_noblock_init();
+	return result;
 }
 
-void uci_destroy(UCIObject* uci){
-	QueueNode* node;
-	QueueNode* garbage;
-	uci->exit = 1;
-	thrd_join(uci->thread, NULL);
-	node = uci->head.next;
-	while(node){
-		garbage = node;
-		node = node->next;
-		free_node(garbage);
-	}
-	mtx_destroy(&(uci->modify));
-	free(uci);
+void uci_destroy(){
+	return;
 }
 
-int uci_respond(UCIObject* uci, char* id, char** argv, int argc){
+int uci_respond(char* id, int argc, char** argv){
 	int i;
 	if(!valid_response(id))
 		return 1;
@@ -111,65 +50,43 @@ int uci_respond(UCIObject* uci, char* id, char** argv, int argc){
 	return 0;
 }
 
-int uci_poll(UCIObject* uci, char*** argv, int* argc){
-	QueueNode* node;
-	node = next_clean_node(uci);
-	if(!node)
+int uci_poll(int* argc, char*** argv){
+	static char buffer[UCI_INPUT_BUFFER_LEN];
+	static ParseData data = {0};
+	if(data.argc){
+		debug_print("%s\n", "Freeing old parsed data.");
+		free_parsedata(&data);
+	}
+	debug_print("%s\n", "Polling for input.");
+	if(!getline_noblock(buffer, UCI_INPUT_BUFFER_LEN)){
+		debug_print("%s\n", "No input detected.");
 		return 0;
-	*argv = node->argv;
-	*argc = node->argc;
+	}
+	debug_print("%s\n", "Input detected.");
+	if(!parse(buffer, &data)){
+		debug_print("%s\n", "Unable to parse input.");
+		return 0;
+	}
+	debug_print("%s\n", "Input successfully parsed.");
+	*argc = data.argc;
+	*argv = data.argv;
 	return 1;
 }
 
 /** PRIVATE LIBRARY FUNCTIONS :) **/
-void collect_garbage(UCIObject* uci){
-	QueueNode* node;
-	QueueNode* garbage;
-	debug_print("%s\n", "Looking for garbage.");
-	node = uci->head.next;
-	if(!node)
-		return;
-	while(node && node->garbage == GARBAGE_EXPIRED){
-		debug_print("%s\n", "Collecting garbage node.");
-		garbage = node;
-		node = pop(uci);
-		free_node(garbage);
+void free_vector(int argc, char** argv){
+	int i;
+	debug_print("%s\n", "Freeing vector.");
+	for(i = 0; i < argc; ++i){
+		free(argv[i]);
 	}
+	free(argv);
 }
 
-QueueNode* next_clean_node(UCIObject* uci){
-	QueueNode* node;
-	debug_print("%s\n", "Looking for next clean node in queue.");
-	node = uci->head.next;
-	while(node){
-		if(!node->garbage){
-			debug_print("%s\n", "Clean node found.");
-			node->garbage = GARBAGE_IN_USE;
-			break;
-		}
-		if(node->garbage == GARBAGE_IN_USE)
-			node->garbage = GARBAGE_EXPIRED;
-		node = node->next;
-	}
-	return node;
-}
-
-void lock(UCIObject* uci){
-	debug_print("%s\n", "Locking UCIObject.");
-	if(mtx_lock(&(uci->modify)) == thrd_success)
-		return;
-	debug_print("%s\n", "Failed to lock UCIObject. Aborting.");
-	uci_destroy(uci);
-	abort();
-}
-
-void unlock(UCIObject* uci){
-	debug_print("%s\n", "Unlocking UCIObject.");
-	if(mtx_unlock(&(uci->modify)) == thrd_success)
-		return;
-	debug_print("%s\n", "Failed to unlock UCIObject. Aborting.");
-	uci_destroy(uci);
-	abort();
+void free_parsedata(ParseData* data){
+	free_vector(data->argc, data->argv);
+	data->argc = 0;
+	data->argv = NULL;
 }
 
 int valid_command(char* value){
@@ -188,76 +105,6 @@ int valid_response(char* value){
 		if(_is_keyword(UCI_UI_RESPONSES[i], value))
 			return 1;
 	return 0;
-}
-
-int work_thread(void* arg){
-	char buffer[UCI_INPUT_BUFFER_LEN];
-	UCIObject* uci;
-	QueueNode* node;
-	uci = (UCIObject*)arg;
-	debug_print("%s\n", "Starting main loop.");
-	while(!uci->exit){
-		if(!getline_noblock(buffer, UCI_INPUT_BUFFER_LEN)){
-			debug_print("%s\n", "No input detected.");
-			collect_garbage(uci);
-			cooldown();
-			continue;
-		}
-		debug_print("%s\n", "Input detected.");
-		node = create_node(buffer);
-		if(!node){
-			continue;
-		}
-		push(uci, node);
-		debug_print("%s\n", "Input processed successfully.");
-	}
-	return 0;
-}
-
-void push(UCIObject* uci, QueueNode* node){
-	lock(uci);
-	if(!uci->head.next)
-		uci->head.next = node;
-	else
-		uci->last->next = node;
-	uci->last = node;
-	unlock(uci);
-}
-
-QueueNode* pop(UCIObject* uci){
-	QueueNode* node;
-	debug_print("%s\n", "Popping node from queue.");
-	lock(uci);
-	if(!uci->head.next)
-		return NULL;
-	node = uci->head.next;
-	uci->head.next = node->next;
-	unlock(uci);
-	return node;
-}
-
-void cooldown(){
-	static struct timespec wait = {
-		.tv_sec=UCI_THREAD_COOLDOWN_S,
-		.tv_nsec=UCI_THREAD_COOLDOWN_NS
-	};
-	debug_print("%s\n", "Performing cooldown.");
-	thrd_sleep(&wait, NULL);
-}
-
-void free_vector(char** argv, int argc){
-	int i;
-	debug_print("%s\n", "Freeing vector.");
-	for(i = 0; i < argc; ++i){
-		free(argv[i]);
-	}
-	free(argv);
-}
-
-void free_node(QueueNode* node){
-	debug_print("%s\n", "Freeing node.");
-	free_vector(node->argv, node->argc);
-	free(node);
 }
 
 int is_whitespace(const char ch){
@@ -291,7 +138,7 @@ int count_tokens(char* buffer){
 	return count;
 }
 
-int copy_tokens(QueueNode* node, char* buffer){
+int copy_tokens(ParseData* data, char* buffer){
 	int reading;
 	int index;
 	int length;
@@ -300,22 +147,22 @@ int copy_tokens(QueueNode* node, char* buffer){
 	reading = 0;
 	ptr = buffer;
 	index = 0;
-	length = 2;
-	debug_print("%s\n", "Copying tokens to node.");
-	while(index < node->argc){
+	length = 1;
+	debug_print("%s\n", "Copying tokens.");
+	while(index < data->argc){
 		if(is_whitespace(*ptr)){
 			if(reading){
 				debug_print("Allocating buffer for token %d.\n", index+1);
-				node->argv[index] = (char*)calloc(length, sizeof(char));
-				if(!node->argv[index]){
+				data->argv[index] = (char*)calloc(length, sizeof(char));
+				if(!data->argv[index]){
 					debug_print("%s\n", "Failed to allocate.");
-					node->argc = index;
+					data->argc = index;
 					return 0;
 				}
-				memcpy(node->argv[index], copy, length * sizeof(char));
+				memcpy(data->argv[index], copy, length * sizeof(char));
 				debug_print("%s\n", "Token copied.");
 				++index;
-				length = 2;
+				length = 1;
 			}
 			reading = 0;
 		}else{
@@ -331,34 +178,27 @@ int copy_tokens(QueueNode* node, char* buffer){
 	return 1;
 }
 
-QueueNode* create_node(char* buffer){
+int parse(char* buffer, ParseData* data){
 	int n;
-	QueueNode* node;
-	debug_print("%s\n", "Allocating node.");
-	node = (QueueNode*)calloc(1, sizeof(QueueNode)); /** CALLOC **/
-	if(!node){
-		debug_print("%s\n", "Failed to allocate.");
-		goto ERROR;
-	}
 	n = count_tokens(buffer);
 	if(!n)
 		goto ERROR;
-	debug_print("%s\n", "Allocating node vector.");
-	node->argv = (char**)malloc(n*sizeof(char*));
-	if(!node->argv){
+	debug_print("%s\n", "Allocating vector.");
+	data->argv = (char**)malloc(n*sizeof(char*));
+	if(!data->argv){
 		debug_print("%s\n", "Failed to allocate.");
 		goto ERROR;
 	}
-	node->argc = n;
-	if(!copy_tokens(node, buffer))
+	data->argc = n;
+	if(!copy_tokens(data, buffer))
 		goto ERROR;
-	if(!valid_command(node->argv[0]))
+	if(!valid_command(data->argv[0]))
 		goto ERROR;
-	return node;
+	return 1;
 	ERROR:
-	debug_print("%s\n", "Failed to create node.");
-	free_node(node);
-	return NULL;
+	debug_print("%s\n", "Failed to parse buffer.");
+	free_parsedata(data);
+	return 0;
 }
 
 #undef _whitespace
