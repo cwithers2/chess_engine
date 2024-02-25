@@ -33,7 +33,7 @@ do{\
 	TEST_PASS = test_cases[i]();\
 	delta = ((double)(clock() - delta))/CLOCKS_PER_SEC;\
 	printf("\tTIME: %f seconds\n", delta);\
-	if(!TEST_PASS) fprintf(stderr, "\tSTATUS: %s\n", FAIL);\
+	if(!TEST_PASS) printf("\tSTATUS: %s\n", FAIL);\
 	else printf("\tSTATUS: %s\n", PASS);\
 }while(0)
 
