@@ -39,8 +39,8 @@ do{\
 
 #ifdef TEST_NO_MAIN
 #define TEST_GENERATE(...)\
-test_func test_cases[] = {__VA_ARGS__};\
 do{\
+	test_func test_cases[] = {__VA_ARGS__};\
 	size_t i, count;\
 	count = sizeof(test_cases)/sizeof(test_func);\
 	for(i = 0; i < count; ++i){\
