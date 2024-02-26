@@ -9,7 +9,6 @@
 #include <src/responses.h>
 
 /** DEFINITIONS :) **/
-#define _whitespace ' ':case '\t':case '\n'
 #define _is_keyword(kw, val) (strcmp(kw, val) == 0)
 
 typedef enum{
@@ -17,7 +16,7 @@ typedef enum{
 	TOKEN_NORMAL,
 	TOKEN_SETOPT,
 	TOKEN_ID,
-	TOKEN_VALUE,
+	TOKEN_GLOB,
 }token_t;
 
 typedef struct ParseData ParseData;
@@ -169,37 +168,42 @@ int next_token(char* buffer, char** token_start, token_t* type){
 			*token_start = ptr;
 			continue;
 		}
-		if(*type == TOKEN_VALUE){
+		if(*type == TOKEN_GLOB){
 			length = strlen(*token_start)-1;
 			return length;
 		}
 		if(!is_whitespace(*ptr))
 			continue;
-		if(*type == TOKEN_NORMAL)
-			break;
-		if(!*type){
+		switch(*type){
+		case TOKEN_UNDEF:
 			if(is_setoption(*token_start))
 				*type = TOKEN_SETOPT;
 			else
 				*type = TOKEN_NORMAL;
+			goto RETURN;
+		case TOKEN_NORMAL:
+			goto RETURN;
+		case TOKEN_SETOPT:
+			if(is_setoption_id(*token_start))
+				*type = TOKEN_ID;
+			else
+				debug_print("%s\n", "Expected token 'id'.");
+			goto RETURN;
+		case TOKEN_ID:
+			if(is_setoption_value(*token_start))
+				*type = TOKEN_GLOB;
+			else{
+				length = next_token(ptr, &keyword, &normal);
+				if(!is_setoption_value(keyword))
+					continue;
+			}
+			goto RETURN;
+		default:
+			debug_print("%s\n", "Unexpected token state.");
 			break;
-		}
-		if(*type == TOKEN_SETOPT && is_setoption_id(*token_start)){
-			*type = TOKEN_ID;
-			break;
-		}
-		if(*type == TOKEN_ID && is_setoption_value(*token_start)){
-			*type = TOKEN_VALUE;
-			break;
-		}
-		if(*type != TOKEN_ID){
-			debug_print("%s\n", "Garbage detected. Expected token 'id'.");
-			break;
-		}
-		length = next_token(ptr, &keyword, &normal);
-		if(is_setoption_value(keyword))
-			break;		
+		}	
 	}
+	RETURN:
 	if(!*token_start)
 		*token_start = ptr;
 	return ptr - *token_start;
@@ -272,5 +276,4 @@ int parse(char* buffer, ParseData* data){
 	return 0;
 }
 
-#undef _whitespace
 #undef _is_keyword
