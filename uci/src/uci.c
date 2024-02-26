@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <debug.h>
 #include <getline_noblock.h>
@@ -10,6 +11,15 @@
 /** DEFINITIONS :) **/
 #define _whitespace ' ':case '\t':case '\n'
 #define _is_keyword(kw, val) (strcmp(kw, val) == 0)
+
+typedef enum{
+	TOKEN_UNDEF,
+	TOKEN_NORMAL,
+	TOKEN_SETOPT,
+	TOKEN_ID,
+	TOKEN_VALUE,
+}token_t;
+
 typedef struct ParseData ParseData;
 
 /** DATA STRUCTURES :) **/
@@ -24,6 +34,10 @@ void free_parsedata(ParseData* data);
 int valid_command(char* value);
 int valid_response(char* value);
 int is_whitespace(const char ch);
+int is_setoption(char* buffer);
+int is_setoption_id(char* buffer);
+int is_setoption_value(char* buffer);
+int next_token(char* buffer, char** token_start, token_t* type);
 int count_tokens(char* buffer);
 int copy_tokens(ParseData* data, char* buffer);
 int parse(char* buffer, ParseData* data);
@@ -116,66 +130,123 @@ int is_whitespace(const char ch){
 	}
 }
 
-int count_tokens(char* buffer){
-	int ignore;
-	int count;
+int is_setoption(char* buffer){
+	static size_t len = strlen(UCI_UI_COMMAND_SETOPTION);
+	if(memcmp(buffer, UCI_UI_COMMAND_SETOPTION, len) != 0)
+		return 0;
+	if(!is_whitespace(buffer[len]))
+		return 0;
+	return 1;
+}
+int is_setoption_id(char* buffer){
+	static size_t len = strlen(UCI_UI_COMMAND_SETOPTION_ID);
+	if(memcmp(buffer, UCI_UI_COMMAND_SETOPTION_ID, len) != 0)
+		return 0;
+	if(!is_whitespace(buffer[len]))
+		return 0;
+	return 1;
+}
+
+int is_setoption_value(char* buffer){
+	static size_t len = strlen(UCI_UI_COMMAND_SETOPTION_VALUE);
+	if(memcmp(buffer, UCI_UI_COMMAND_SETOPTION_VALUE, len) != 0)
+		return 0;
+	if(!is_whitespace(buffer[len]))
+		return 0;
+	return 1;
+}
+
+int next_token(char* buffer, char** token_start, token_t* type){
+	static token_t normal = TOKEN_NORMAL;
+	int length;
 	char* ptr;
-	debug_print("%s\n", "Counting tokens.");
-	ignore = 1;
-	count = 0;
-	ptr = buffer;
-	while(*ptr){
-		if(is_whitespace(*ptr)){
-			ignore = 1;
-		}else{
-			if(ignore)
-				++count;
-			ignore = 0;
+	char* keyword;
+	*token_start = NULL;
+	for(ptr = buffer; *ptr; ++ptr){
+		if(!(*token_start)){
+			if(is_whitespace(*ptr))
+				continue;
+			*token_start = ptr;
+			continue;
 		}
-		++ptr;
+		if(*type == TOKEN_VALUE){
+			length = strlen(*token_start)-1;
+			return length;
+		}
+		if(!is_whitespace(*ptr))
+			continue;
+		if(*type == TOKEN_NORMAL)
+			break;
+		if(!*type){
+			if(is_setoption(*token_start))
+				*type = TOKEN_SETOPT;
+			else
+				*type = TOKEN_NORMAL;
+			break;
+		}
+		if(*type == TOKEN_SETOPT && is_setoption_id(*token_start)){
+			*type = TOKEN_ID;
+			break;
+		}
+		if(*type == TOKEN_ID && is_setoption_value(*token_start)){
+			*type = TOKEN_VALUE;
+			break;
+		}
+		if(*type != TOKEN_ID){
+			debug_print("%s\n", "Garbage detected. Expected token 'id'.");
+			break;
+		}
+		length = next_token(ptr, &keyword, &normal);
+		if(is_setoption_value(keyword))
+			break;		
+	}
+	if(!*token_start)
+		*token_start = ptr;
+	return ptr - *token_start;
+}
+
+int count_tokens(char* buffer){
+	int count;
+	int length;
+	char* head;
+	char* token_start;
+	token_t type;
+	count = 0;
+	head = buffer;
+	type = TOKEN_UNDEF;
+	debug_print("%s\n", "Counting tokens.");
+	while(1){
+		length = next_token(head, &token_start, &type);
+		if(!length)
+			break;
+		++count;
+		head = token_start + length;
 	}
 	debug_print("Counted %d token(s).", count);
 	return count;
 }
 
 int copy_tokens(ParseData* data, char* buffer){
-	int reading;
-	int index;
 	int length;
-	char* ptr;
-	char* copy;
-	reading = 0;
-	ptr = buffer;
-	index = 0;
-	length = 1;
+	int i;
+	char* head;
+	char* token_start;
+	token_t type;
+	head = buffer;
+	type = TOKEN_UNDEF;
 	debug_print("%s\n", "Copying tokens.");
-	while(index < data->argc){
-		if(is_whitespace(*ptr)){
-			if(reading){
-				debug_print("Allocating buffer for token %d.\n", index+1);
-				data->argv[index] = (char*)calloc(length, sizeof(char));
-				if(!data->argv[index]){
-					debug_print("%s\n", "Failed to allocate.");
-					data->argc = index;
-					return 0;
-				}
-				memcpy(data->argv[index], copy, length * sizeof(char));
-				debug_print("%s\n", "Token copied.");
-				++index;
-				length = 1;
-			}
-			reading = 0;
-		}else{
-			if(!reading)
-				copy = ptr;
-			else
-				++length;
-			reading = 1;
+	for(i = 0; i < data->argc; ++i){
+		length = next_token(head, &token_start, &type);
+		debug_print("Allocating buffer for token %d.\n", i+1);
+		data->argv[i] = (char*)calloc(length, sizeof(char));
+		if(!data->argv[i]){
+			debug_print("%s\n", "Failed to allocate.");
+			data->argc = i;
+			return 0;
 		}
-		++ptr;
+		memcpy(data->argv[i], token_start, length);
+		head = token_start + length;
 	}
-	debug_print("%s\n", "Tokens copied to node.");
-	return 1;
 }
 
 int parse(char* buffer, ParseData* data){

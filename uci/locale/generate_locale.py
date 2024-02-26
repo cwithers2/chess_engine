@@ -19,13 +19,16 @@ responses = {
 	"array"   : "UI_RESPONSES"
 }
 
-def load_data(f):
-	data = {}
+def load_tokens(f):
+	tokens = {"normal" : {}, "special" : {} }
 	with open(f, "r") as fp:
 		for line in fp:
 			key, val = line.rstrip().split()
-			data[key] = val
-	return data
+			if key[0] == '_':
+				tokens["special"][key] = val
+			else:
+				tokens["normal"][key] = val
+	return tokens
 
 def write_data(filename, function, data, tokens):
 	with open(filename, "+w") as f:
@@ -40,21 +43,25 @@ def macro_definition(prefix, key, val):
 def generate_header(data, tokens, out):
 	print(f"#ifndef {data['guard']}", file=out)
 	print(f"#define {data['guard']}", file=out)
-	for key, val in tokens.items():
+	for key, val in tokens["normal"].items():
 		print(macro_definition(data["prefix"], key, val), file=out)
+	print("//special tokens:", file=out)
+	for key, val in tokens["special"].items():
+		print(macro_definition(data["prefix"], key[1:], val), file=out)
 	print("#endif", file=out)
 
 def generate_tokens(data, tokens, out):
 	array = data["array"]
+	ts = tokens["normal"]
 	print(f"#include <{data['header']}>", file=out)
 	print(f"static const char* {macro_prefix}{array}[] = ", '{', file=out)
-	for key in tokens:
+	for key in ts:
 		print(f"\t{macro_token(data['prefix'], key)},", file=out)
 	print("};", file=out)
-	print(f"#define {macro_prefix}{array}_COUNT {len(tokens.keys())}", file=out)
+	print(f"#define {macro_prefix}{array}_COUNT {len(ts.keys())}", file=out)
 
 def write_files(data):
-	tokens = load_data(data["source"])
+	tokens = load_tokens(data["source"])
 	write_data(data["header"], generate_header, data, tokens)
 	write_data(data["tokens"], generate_tokens, data, tokens)
 	
