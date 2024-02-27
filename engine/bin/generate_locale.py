@@ -2,18 +2,18 @@
 macro_prefix    = "UCI_"
 
 commands = {
-	"source"  : "commands.txt",
-	"header"  : "locale/commands.h",
-	"tokens"  : "src/commands.h",
+	"source"  : "srv/commands.txt",
+	"header"  : "include/commands.h",
+	"tokens"  : "src/commands.c",
 	"guard"   : "COMMANDS_H",
 	"prefix"  : "UI_COMMAND_",
 	"array"   : "UI_COMMANDS"
 }
 
 responses = {
-	"source"  : "responses.txt",
-	"header"  : "locale/responses.h",
-	"tokens"  : "src/responses.h",
+	"source"  : "srv/responses.txt",
+	"header"  : "include/responses.h",
+	"tokens"  : "src/responses.c",
 	"guard"   : "RESPONSES_H",
 	"prefix"  : "UI_RESPONSE_",
 	"array"   : "UI_RESPONSES"
@@ -36,7 +36,7 @@ def write_data(filename, function, data, tokens):
 
 def macro_token(prefix, key):
 	return f"{macro_prefix}{prefix}{key}"
-	
+
 def macro_definition(prefix, key, val):
 	return f'#define {macro_token(prefix, key):<35s}"{val}"'
 
@@ -53,7 +53,7 @@ def generate_header(data, tokens, out):
 def generate_tokens(data, tokens, out):
 	array = data["array"]
 	ts = tokens["normal"]
-	print(f"#include <{data['header']}>", file=out)
+#	print(f"#include <{data['header']}>", file=out)
 	print(f"static const char* {macro_prefix}{array}[] = ", '{', file=out)
 	for key in ts:
 		print(f"\t{macro_token(data['prefix'], key)},", file=out)

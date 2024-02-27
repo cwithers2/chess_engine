@@ -5,8 +5,10 @@
 #include <debug.h>
 #include <getline_noblock.h>
 #include <uci.h>
-#include <src/commands.h>
-#include <src/responses.h>
+#include <commands.h>
+#include <responses.h>
+#include "commands.c"
+#include "responses.c"
 
 /** DEFINITIONS :) **/
 #define _whitespace ' ': case '\n': case '\t'
