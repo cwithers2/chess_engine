@@ -9,6 +9,7 @@
 #include <src/responses.h>
 
 /** DEFINITIONS :) **/
+#define _whitespace ' ': case '\n': case '\t'
 #define _is_keyword(kw, val) (strcmp(kw, val) == 0)
 
 typedef enum{
