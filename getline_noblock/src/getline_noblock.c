@@ -1,4 +1,3 @@
-#include <getline_noblock.h>
 //C++ version
 #ifdef __cplusplus
 #include <cstdio>

@@ -7,7 +7,7 @@ OBJ_DIR := ./obj
 INCLUDES = -I$(INC_DIR)
 
 CC      := g++
-CFLAGS  := $(CFLAGS) $(INCLUDES) 
+CFLAGS  := $(CFLAGS)
 
 RM      := $(RM)
 
@@ -15,11 +15,17 @@ RM      := $(RM)
 HEADERS = $(INC_DIR)/getline_noblock.h
 OBJECTS = $(OBJ_DIR)/getline_noblock.o
 
-build: $(OBJECTS)
+TARGET  = libgetline_noblock.a
+
+build: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	ar rcs $(TARGET) $(OBJECTS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
 	@mkdir -p $(OBJ_DIR)
 	$(CC) -c $(CFLAGS) $< -o $@
 
 clean:
+	$(RM) $(TARGET)
 	$(RM) -R $(OBJ_DIR)
