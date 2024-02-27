@@ -16,7 +16,7 @@ RM      := $(RM)
 
 #files
 HEADERS  = $(INC_DIR)/uci.h $(GETLINE)/getline_noblock.h $(UTIL)/debug.h $(LOCALE)/src/commands.h $(LOCALE)/src/responses.h
-OBJECTS  = $(OBJ_DIR)/uci.o ../getline_noblock/obj/getline_noblock.o
+OBJECTS  = $(OBJ_DIR)/uci.o
 
 TARGET   = libuci.a
 
