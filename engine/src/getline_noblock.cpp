@@ -2,6 +2,7 @@
 #ifdef __cplusplus
 #include <cstdio>
 #include <iostream>
+extern "C"{
 int getline_noblock_init(){
 	std::cin.sync_with_stdio(false);
 	return 0;
@@ -14,6 +15,8 @@ char* getline_noblock(char* buffer, int len){
 	if(!fgets(buffer, len, stdin))
 		return NULL;
 	return buffer;
+}
+
 }
 // C Linux
 #elif __linux__
