@@ -7,6 +7,7 @@
 #include <uci.h>
 #include <commands.h>
 #include <responses.h>
+#include <tokenize.h>
 #include "commands.c"
 #include "responses.c"
 
@@ -20,9 +21,12 @@ typedef enum{
 	TOKEN_SETOPT,
 	TOKEN_ID,
 	TOKEN_GLOB,
+	TOKEN_VALUE,
+	TOKEN_POS
 }token_t;
 
 typedef struct ParseData ParseData;
+char delim[] = " /t/n";
 
 /** DATA STRUCTURES :) **/
 struct ParseData{
@@ -123,93 +127,58 @@ int valid_response(char* value){
 	return 0;
 }
 
-int is_whitespace(const char ch){
-	switch(ch){
-		case _whitespace:
-			return 1;
-		default:
-			return 0;
-	}
-}
-
-int is_setoption(char* buffer){
-	static size_t len = strlen(UCI_UI_COMMAND_SETOPTION);
-	if(memcmp(buffer, UCI_UI_COMMAND_SETOPTION, len) != 0)
-		return 0;
-	if(!is_whitespace(buffer[len]))
-		return 0;
-	return 1;
-}
-int is_setoption_id(char* buffer){
-	static size_t len = strlen(UCI_UI_COMMAND_SETOPTION_ID);
-	if(memcmp(buffer, UCI_UI_COMMAND_SETOPTION_ID, len) != 0)
-		return 0;
-	if(!is_whitespace(buffer[len]))
-		return 0;
-	return 1;
-}
-
-int is_setoption_value(char* buffer){
-	static size_t len = strlen(UCI_UI_COMMAND_SETOPTION_VALUE);
-	if(memcmp(buffer, UCI_UI_COMMAND_SETOPTION_VALUE, len) != 0)
-		return 0;
-	if(!is_whitespace(buffer[len]))
-		return 0;
-	return 1;
-}
-
 int next_token(char* buffer, char** token_start, token_t* type){
-	static token_t normal = TOKEN_NORMAL;
 	int length;
-	char* ptr;
-	char* keyword;
-	*token_start = NULL;
-	for(ptr = buffer; *ptr; ++ptr){
-		if(!(*token_start)){
-			if(is_whitespace(*ptr))
-				continue;
-			*token_start = ptr;
-			continue;
-		}
-		if(*type == TOKEN_GLOB){
-			length = strlen(*token_start)-1;
-			return length;
-		}
-		if(!is_whitespace(*ptr))
-			continue;
-		switch(*type){
-		case TOKEN_UNDEF:
-			if(is_setoption(*token_start))
-				*type = TOKEN_SETOPT;
-			else
-				*type = TOKEN_NORMAL;
-			goto RETURN;
-		case TOKEN_NORMAL:
-			goto RETURN;
-		case TOKEN_SETOPT:
-			if(is_setoption_id(*token_start))
-				*type = TOKEN_ID;
-			else
-				debug_print("%s\n", "Expected token 'id'.");
-			goto RETURN;
-		case TOKEN_ID:
-			if(is_setoption_value(*token_start))
-				*type = TOKEN_GLOB;
-			else{
-				length = next_token(ptr, &keyword, &normal);
-				if(!is_setoption_value(keyword))
-					continue;
-			}
-			goto RETURN;
-		default:
-			debug_print("%s\n", "Unexpected token state.");
+	length = count_while_delim(buffer, delim);
+	if(length < 0)
+		return -length;
+	*token_start = buffer + length;
+	switch(*type){
+	case TOKEN_UNDEF:
+		if(check_token(*token_start, UCI_UI_COMMAND_SETOPTION, delim))
+			*type = TOKEN_SETOPT;
+		else if(check_token(*token_start, UCI_UI_COMMAND_POSITION, delim))
+			*type = TOKEN_POS;
+		else
+			*type = TOKEN_NORMAL;
+		break;
+	case TOKEN_GLOB:
+		length = strlen(*token_start);
+		break;
+	case TOKEN_SETOPT:
+		if(check_token(*token_start, UCI_UI_COMMAND_SETOPTION_ID, delim)){
+			length = sizeof(UCI_UI_COMMAND_SETOPTION_ID) - 1;
+			*type = TOKEN_ID;
 			break;
-		}	
+		}else{
+			debug_print("%s\n", "Expected token 'id'.");
+			goto DEFAULT_CASE;
+		}
+	case TOKEN_ID:
+		length = count_until_token(*token_start,
+		                           UCI_UI_COMMAND_SETOPTION_VALUE, delim);
+		if(length < 0)
+			length = -length;
+		else
+			*type = TOKEN_VALUE;
+		break;
+	case TOKEN_VALUE:
+		if(check_token(*token_start, UCI_UI_COMMAND_SETOPTION_VALUE, delim)){
+			length = sizeof(UCI_UI_COMMAND_SETOPTION_VALUE) - 1;
+			*type = TOKEN_GLOB;
+			break;
+		}else{
+			debug_print("%s\n", "Expected token 'value'.");
+			goto DEFAULT_CASE;
+		}
+	DEFAULT_CASE:
+	default:
+		length = count_until_delim(*token_start, delim);
+		if(length < 0)
+			length = -length;
+		break;
 	}
-	RETURN:
-	if(!*token_start)
-		*token_start = ptr;
-	return ptr - *token_start;
+	return length;
 }
 
 int count_tokens(char* buffer){
