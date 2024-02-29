@@ -36,9 +36,13 @@ BUILD_MAIN = src/main.c
 BUILD_PROG = flipflop
 
 #Compiling flags
-CFLAGS    := $(CFLAGS) -I$(INC_DIR) -lstdc++
+CFLAGS    := $(CFLAGS) -I$(INC_DIR)
 CXXFLAGS  := $(CXXFLAGS) -I$(INC_DIR)
-
+#Flag to build obj code
+C_OBJ     := -c
+CXX_OBJ   := -c
+#Libraries to include in the build process
+C_LIBS    := -lstdc++
 ################################################################################
 #Magic
 headers    = $(addprefix $(INC_DIR), $(HEADERS))
@@ -56,20 +60,20 @@ $(LIBRARY): $(objects)
 	$(AR) $(ARFLAGS) $@ $^
 
 $(BUILD_PROG): $(objects)
-	$(CC) $(CFLAGS) $(BUILD_MAIN) $< -o $@
+	$(CC) $(CFLAGS) $(BUILD_MAIN) $^ $(C_LIBS) -o $@
 
 $(TEST_PROG): $(objects)
-	$(CC) $(CFLAGS) $(TEST_MAIN) $< -o $@
+	$(CC) $(CFLAGS) $(TEST_MAIN) $^ $(C_LIBS) -o $@
 
 #c code
 $(OBJ_DIR)%.o: $(SRC_DIR)%.c $(headers)
 	@mkdir -p $(OBJ_DIR)
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) $(C_OBJ) $(CFLAGS) $< -o $@
 
 #c++ code
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp $(headers)
 	@mkdir -p $(OBJ_DIR)
-	$(CXX) -c $(CXXFLAGS) $< -o $@
+	$(CXX) $(CXX_OBJ) $(CXXFLAGS) $< -o $@
 
 clean:
 	$(RM) $(LIBRARY) $(TEST_PROG) $(BUILD_PROG)
