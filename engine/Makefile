@@ -31,9 +31,9 @@ SCRIPTS    = generate_locale.py
 #Outputs
 LIBRARY    = #libengine.a
 TEST_MAIN  = src/test.c
-TEST_PROG  = test_suite
+TEST_PROG  = ./test_suite
 BUILD_MAIN = src/main.c
-BUILD_PROG = flipflop
+BUILD_PROG = ./flipflop
 
 #Compiling flags
 CFLAGS    := $(CFLAGS) -I$(INC_DIR)
@@ -49,9 +49,9 @@ headers    = $(addprefix $(INC_DIR), $(HEADERS))
 objects    = $(addprefix $(OBJ_DIR), $(OBJECTS))
 scripts    = $(addprefix $(BIN_DIR), $(SCRIPTS))
 
-build: generate $(LIBRARY) $(BUILD_PROG)
+build: generate $(LIBRARY) $(BUILD_PROG) $(BUILD_MAIN)
 
-test: generate $(TEST_PROG)
+test: generate $(TEST_PROG) $(TEST_MAIN) RUN_TEST
 
 generate:
 	$(foreach script, $(scripts), $(script))
@@ -64,6 +64,9 @@ $(BUILD_PROG): $(objects)
 
 $(TEST_PROG): $(objects)
 	$(CC) $(CFLAGS) $(TEST_MAIN) $^ $(C_LIBS) -o $@
+
+RUN_TEST:
+	$(TEST_PROG)
 
 #c code
 $(OBJ_DIR)%.o: $(SRC_DIR)%.c $(headers)
@@ -80,4 +83,4 @@ clean:
 	$(RM) $(GENERATE)
 	$(RM) $(OBJECTS)
 	$(RM) -R $(OBJ_DIR)
-	
+
