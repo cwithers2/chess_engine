@@ -2,26 +2,25 @@
 #include <string.h>
 
 int count_until_token(char* buffer, char* token, char* delim){
+	char* ptr;
+	char* end;
 	int len;
-	int val;
-	len = count_while_delim(buffer, delim);
-	if(len < 0)
-		return len;
-	while(!check_token(buffer, token, delim)){
-		val = count_until_delim(buffer + len, delim);
-		if(val < 0){
-			len = -len + val;
+	ptr = buffer;
+	end = buffer + strlen(buffer);
+	len = 0;
+	while(ptr != end){
+		len = count_while_delim(ptr, delim);
+		if(len < 0)//we read the entire string without finding the token
+			return -(end - buffer);
+		ptr += len;
+		if(check_token(ptr, token, delim))
 			break;
-		}
-		len += val;
-		val = count_while_delim(buffer + len, delim);
-		if(val < 0){
-			len = -len + val;
-			break;
-		}
-		len += val;
+		len = count_until_delim(ptr, delim);
+		if(len < 0)
+			return -(end - buffer);
+		ptr += len;
 	}
-	return len;
+	return ptr - buffer;
 }
 
 int check_token(char* buffer, char* token, char* delim){
@@ -42,7 +41,7 @@ int count_while_delim(char* buffer, char* delim){
 	for(ptr = buffer; *ptr; ++ptr){
 		loc = strchr(delim, *ptr);
 		if(!loc)
-			return loc - buffer;
+			return ptr - buffer;
 	}
 	return -(ptr - buffer);
 }
@@ -50,28 +49,10 @@ int count_while_delim(char* buffer, char* delim){
 int count_until_delim(char* buffer, char* delim){
 	char* ptr;
 	char* loc;
-	for(ptr = delim; *ptr; ++ptr){
-		loc = strchr(buffer, *ptr);
+	for(ptr = buffer; *ptr; ++ptr){
+		loc = strchr(delim, *ptr);
 		if(loc)
-			return loc - buffer;
+			return ptr - buffer;
 	}
 	return -(ptr - buffer);
-}
-
-int get_token(char* buffer, char** token_start, char* delim){
-	char* ptr;
-	*token_start = NULL;
-	for(ptr = buffer; *ptr; ++ptr){
-		if(!*token_start){
-			if(strchr(delim, *ptr) != NULL)
-				continue;
-			*token_start = ptr;
-			continue;
-		}
-		if(strchr(delim, *ptr) != NULL)
-			break;
-	}
-	if(!*token_start)
-		return 0;
-	return ptr - *token_start;
 }
