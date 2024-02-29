@@ -49,9 +49,9 @@ headers    = $(addprefix $(INC_DIR), $(HEADERS))
 objects    = $(addprefix $(OBJ_DIR), $(OBJECTS))
 scripts    = $(addprefix $(BIN_DIR), $(SCRIPTS))
 
-build: generate $(LIBRARY) $(BUILD_PROG) $(BUILD_MAIN)
+build: generate $(LIBRARY) $(BUILD_PROG)
 
-test: generate $(TEST_PROG) $(TEST_MAIN) RUN_TEST
+test: generate $(TEST_PROG) RUN_TEST
 
 generate:
 	$(foreach script, $(scripts), $(script))
@@ -59,11 +59,11 @@ generate:
 $(LIBRARY): $(objects)
 	$(AR) $(ARFLAGS) $@ $^
 
-$(BUILD_PROG): $(objects)
-	$(CC) $(CFLAGS) $(BUILD_MAIN) $^ $(C_LIBS) -o $@
+$(BUILD_PROG): $(objects) $(BUILD_MAIN)
+	$(CC) $(CFLAGS) $^ $(C_LIBS) -o $@
 
-$(TEST_PROG): $(objects)
-	$(CC) $(CFLAGS) $(TEST_MAIN) $^ $(C_LIBS) -o $@
+$(TEST_PROG): $(objects) $(TEST_MAIN)
+	$(CC) $(CFLAGS) $^ $(C_LIBS) -o $@
 
 RUN_TEST:
 	$(TEST_PROG)
