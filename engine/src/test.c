@@ -1,20 +1,24 @@
 #include <test.h>
+#include <debug.h>
 
 //tokenizer tests
 #include <tokenize.h>
 int test1(){
+	TEST_NAME = "test::tokenize::count_until_delim";
 	char buffer[] = "Hello, World!";
 	char delim[] = "j, t";
 	return count_until_delim(buffer, delim) == 5;
 }
 
 int test2(){
+	TEST_NAME = "test::tokenize::count_while_delim";
 	char buffer[] = "Hello, World!";
 	char delim[] = "HeloW ";
 	return count_while_delim(buffer, delim) == 5;
 }
 
 int test3(){
+	TEST_NAME = "test::tokenize::check_token";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", ";
 	char token[] = "Hello";
@@ -22,6 +26,7 @@ int test3(){
 }
 
 int test4(){
+	TEST_NAME = "test::tokenize::check_token";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", ";
 	char token[] = "World!";
@@ -29,6 +34,7 @@ int test4(){
 }
 
 int test5(){
+	TEST_NAME = "test::tokenize::count_until_token";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", ";
 	char token[] = "Hello";
@@ -36,6 +42,7 @@ int test5(){
 }
 
 int test6(){
+	TEST_NAME = "test::tokenize::count_until_token";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", ";
 	char token[] = "World";
@@ -43,24 +50,28 @@ int test6(){
 }
 
 int test7(){
+	TEST_NAME = "test::tokenize::count_while_delim";
 	char buffer[] = "  ,,  ,,, ,  Hello, World!";
 	char delim[] = ", ";
 	return count_while_delim(buffer, delim) == 13; 
 }
 
 int test8(){
+	TEST_NAME = "test::tokenize::count_while_delim";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", ";
 	return count_while_delim(buffer, delim) == 0;
 }
 
 int test9(){
+	TEST_NAME = "test::tokenize::count_until_delim";
 	char buffer[] = " Hello, World!";
 	char delim[] = ", ";
 	return count_until_delim(buffer, delim) == 0;
 }
 
 int test10(){
+	TEST_NAME = "test::tokenize::count_until_token";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", !";
 	char token[] = "World";
@@ -68,6 +79,7 @@ int test10(){
 }
 
 int test11(){
+	TEST_NAME = "test::tokenize::count_until_token";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", !";
 	char token[] = "Hello";
@@ -75,6 +87,7 @@ int test11(){
 }
 
 int test12(){
+	TEST_NAME = "test::tokenize::count_until_token";
 	char buffer[] = "Hello, World!";
 	char delim[] = ", !";
 	char token[] = "Goodbye";

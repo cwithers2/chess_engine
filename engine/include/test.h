@@ -18,19 +18,19 @@
 
 #define FAIL "\033[0;31mFAIL\033[0m"
 #define PASS "\033[0;32mPASS\033[0m"
-#define HEAD "\033[0;35mRUNNING TEST #%ld:\n\033[0m"
+#define HEAD "\033[0;35m%s:\n\033[0m"
 
 typedef int(*test_func)(void);
 int TEST_PASS;
-
+char* TEST_NAME;
 #define TEST_RUN(IDX)\
 do{\
 	double delta;\
 	clock_t t;\
-	printf(HEAD, IDX);\
 	delta = clock();\
 	TEST_PASS = test_cases[i-1]();\
 	delta = ((double)(clock() - delta))/CLOCKS_PER_SEC;\
+	printf(HEAD, TEST_NAME);\
 	printf("\tTIME: %f seconds\n", delta);\
 	if(!TEST_PASS) printf("\tSTATUS: %s\n", FAIL);\
 	else printf("\tSTATUS: %s\n", PASS);\
