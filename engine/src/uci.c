@@ -12,40 +12,40 @@
 #include "responses.c"
 
 /** DEFINITIONS :) **/
-#define _whitespace ' ': case '\n': case '\t'
-#define _is_keyword(kw, val) (strcmp(kw, val) == 0)
+#define IS_KEYWORD(kw, val) (strcmp(kw, val) == 0)
+#define DELIM " \t\n"
+#define CHECK_TOKEN(BUF, CMD) check_token(BUF, CMD, DELIM)
+#define COUNT_UNTIL_TOKEN(BUF, CMD) count_until_token(BUF, CMD, DELIM)
+#define COUNT_UNTIL_DELIM(BUF) count_until_delim(BUF, DELIM)
+#define COUNT_WHILE_DELIM(BUF) count_while_delim(BUF, DELIM)
 
-typedef enum{
-	TOKEN_UNDEF,
-	TOKEN_NORMAL,
-	TOKEN_SETOPT,
-	TOKEN_ID,
-	TOKEN_GLOB,
-	TOKEN_VALUE,
-	TOKEN_POS
-}token_t;
-
+typedef enum TokenState TokenState;
 typedef struct ParseData ParseData;
-char delim[] = " /t/n";
 
 /** DATA STRUCTURES :) **/
+enum TokenState{
+	TOKEN_UNDEF,
+	TOKEN_ID,
+	TOKEN_START,
+	TOKEN_GLOB,
+	TOKEN_SETOPT,
+	TOKEN_VALUE,
+	TOKEN_DEFAULT,
+	TOKEN_DONE
+};
+
 struct ParseData{
 	int argc;
 	char** argv;
 };
 
 /** PRIVATE FORWARD DECLARATIONS :) **/
-void free_vector(int argc, char** argv);
 void free_parsedata(ParseData* data);
 int valid_command(char* value);
 int valid_response(char* value);
-int is_whitespace(const char ch);
-int is_setoption(char* buffer);
-int is_setoption_id(char* buffer);
-int is_setoption_value(char* buffer);
-int next_token(char* buffer, char** token_start, token_t* type);
-int count_tokens(char* buffer);
-int copy_tokens(ParseData* data, char* buffer);
+int parse_token(char* buffer, TokenState* state);
+int delimit_tokens(char* buffer);
+void copy_tokens(ParseData* data, char* buffer);
 int parse(char* buffer, ParseData* data);
 
 /** PUBILC LIBRARY FUNCTIONS :) **/
@@ -94,17 +94,8 @@ int uci_poll(int* argc, char*** argv){
 }
 
 /** PRIVATE LIBRARY FUNCTIONS :) **/
-void free_vector(int argc, char** argv){
-	int i;
-	debug_print("%s\n", "Freeing vector.");
-	for(i = 0; i < argc; ++i){
-		free(argv[i]);
-	}
-	free(argv);
-}
-
 void free_parsedata(ParseData* data){
-	free_vector(data->argc, data->argv);
+	free(data->argv);
 	data->argc = 0;
 	data->argv = NULL;
 }
@@ -113,7 +104,7 @@ int valid_command(char* value){
 	int i;
 	debug_print("Validating command: %s\n", value);
 	for(i = 0; i < UCI_UI_COMMANDS_COUNT; ++i)
-		if(_is_keyword(UCI_UI_COMMANDS[i], value))
+		if(IS_KEYWORD(UCI_UI_COMMANDS[i], value))
 			return 1;
 	return 0;
 }
@@ -122,113 +113,109 @@ int valid_response(char* value){
 	int i;
 	debug_print("Validating response: %s\n", value);
 	for(i = 0; i < UCI_UI_RESPONSES_COUNT; ++i)
-		if(_is_keyword(UCI_UI_RESPONSES[i], value))
+		if(IS_KEYWORD(UCI_UI_RESPONSES[i], value))
 			return 1;
 	return 0;
 }
 
-int next_token(char* buffer, char** token_start, token_t* type){
-	int length;
-	length = count_while_delim(buffer, delim);
-	if(length < 0)
-		return -length;
-	*token_start = buffer + length;
-	switch(*type){
-	case TOKEN_UNDEF:
-		if(check_token(*token_start, UCI_UI_COMMAND_SETOPTION, delim))
-			*type = TOKEN_SETOPT;
-		else if(check_token(*token_start, UCI_UI_COMMAND_POSITION, delim))
-			*type = TOKEN_POS;
-		else
-			*type = TOKEN_NORMAL;
-		break;
+int parse_token(char* buffer, TokenState* state){
+	int len;
+	len = 0;
+	switch(*state){
+	case TOKEN_START:
+		if(!CHECK_TOKEN(buffer, UCI_UI_COMMAND_SETOPTION)){
+			*state = TOKEN_SETOPT;
+			len = sizeof(UCI_UI_COMMAND_SETOPTION)-1;
+			break;
+		}
+		*state = TOKEN_DEFAULT;
+		goto DEFAULT_CASE;
 	case TOKEN_GLOB:
-		length = strlen(*token_start);
+		*state = TOKEN_DONE;
+		len = strlen(buffer);
 		break;
 	case TOKEN_SETOPT:
-		if(check_token(*token_start, UCI_UI_COMMAND_SETOPTION_ID, delim)){
-			length = sizeof(UCI_UI_COMMAND_SETOPTION_ID) - 1;
-			*type = TOKEN_ID;
+		if(CHECK_TOKEN(buffer, UCI_UI_COMMAND_SETOPTION_ID)){
+			*state = TOKEN_ID;
+			len = sizeof(UCI_UI_COMMAND_SETOPTION_ID)-1;
 			break;
-		}else{
-			debug_print("%s\n", "Expected token 'id'.");
-			goto DEFAULT_CASE;
 		}
+		goto ABORT;
 	case TOKEN_ID:
-		length = count_until_token(*token_start,
-		                           UCI_UI_COMMAND_SETOPTION_VALUE, delim);
-		if(length < 0)
-			length = -length;
-		else
-			*type = TOKEN_VALUE;
+		len = COUNT_UNTIL_TOKEN(buffer, UCI_UI_COMMAND_SETOPTION_VALUE);
+		if(len < 0){
+			*state = TOKEN_DONE;
+			len = -len;
+		}else
+			*state = TOKEN_VALUE;
 		break;
 	case TOKEN_VALUE:
-		if(check_token(*token_start, UCI_UI_COMMAND_SETOPTION_VALUE, delim)){
-			length = sizeof(UCI_UI_COMMAND_SETOPTION_VALUE) - 1;
-			*type = TOKEN_GLOB;
+		if(CHECK_TOKEN(buffer, UCI_UI_COMMAND_SETOPTION_VALUE)){
+			*state = TOKEN_GLOB;
+			len = sizeof(UCI_UI_COMMAND_SETOPTION_VALUE)-1;
 			break;
-		}else{
-			debug_print("%s\n", "Expected token 'value'.");
-			goto DEFAULT_CASE;
 		}
+		goto ABORT;
 	DEFAULT_CASE:
 	default:
-		length = count_until_delim(*token_start, delim);
-		if(length < 0)
-			length = -length;
+		len = COUNT_UNTIL_DELIM(buffer);
+		if(len < 0)
+			len = -len;
 		break;
 	}
-	return length;
+	return len;
+	ABORT:
+	*state = TOKEN_UNDEF;
+	return -strlen(buffer);
 }
 
-int count_tokens(char* buffer){
+int delimit_tokens(char* buffer){
+	char* ptr;
+	char* end;
 	int count;
-	int length;
-	char* head;
-	char* token_start;
-	token_t type;
+	int len;
+	TokenState state;
+	ptr = buffer;
+	end = buffer + strlen(buffer);
 	count = 0;
-	head = buffer;
-	type = TOKEN_UNDEF;
-	debug_print("%s\n", "Counting tokens.");
-	while(1){
-		length = next_token(head, &token_start, &type);
-		if(!length)
+	state = TOKEN_START;
+	while(ptr != end){
+		len = COUNT_WHILE_DELIM(buffer);
+		if(len < 0)
 			break;
+		ptr += len;
+		len = parse_token(ptr, &state);
+		if(len < 0)
+			break;
+		ptr += len;
+		ptr[0] = '\0';
 		++count;
-		head = token_start + length;
+		++ptr;
 	}
-	debug_print("Counted %d token(s).", count);
 	return count;
 }
 
-int copy_tokens(ParseData* data, char* buffer){
-	int length;
+void copy_tokens(ParseData* data, char* buffer){
+	char* ptr;
+	int len;
 	int i;
-	char* head;
-	char* token_start;
-	token_t type;
-	head = buffer;
-	type = TOKEN_UNDEF;
-	debug_print("%s\n", "Copying tokens.");
+	len = 0;
+	ptr = buffer;
 	for(i = 0; i < data->argc; ++i){
-		length = next_token(head, &token_start, &type);
-		debug_print("Allocating buffer for token %d.\n", i+1);
-		data->argv[i] = (char*)calloc(length, sizeof(char));
-		if(!data->argv[i]){
-			debug_print("%s\n", "Failed to allocate.");
-			data->argc = i;
-			return 0;
-		}
-		memcpy(data->argv[i], token_start, length);
-		head = token_start + length;
+		ptr += len;
+		len = COUNT_WHILE_DELIM(buffer);
+		ptr += len;
+		data->argv[i] = ptr;
+		len = strlen(ptr) + 1;
 	}
 }
 
 int parse(char* buffer, ParseData* data){
 	int n;
-	n = count_tokens(buffer);
+	n = delimit_tokens(buffer);
 	if(!n)
+		goto ERROR;
+	if(!valid_command(buffer))
 		goto ERROR;
 	debug_print("%s\n", "Allocating vector.");
 	data->argv = (char**)malloc(n*sizeof(char*));
@@ -237,15 +224,10 @@ int parse(char* buffer, ParseData* data){
 		goto ERROR;
 	}
 	data->argc = n;
-	if(!copy_tokens(data, buffer))
-		goto ERROR;
-	if(!valid_command(data->argv[0]))
-		goto ERROR;
+	copy_tokens(data, buffer);
 	return 1;
 	ERROR:
 	debug_print("%s\n", "Failed to parse buffer.");
 	free_parsedata(data);
 	return 0;
 }
-
-#undef _is_keyword
