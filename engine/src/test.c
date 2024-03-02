@@ -1,7 +1,7 @@
 #include <test.h>
 #include <debug.h>
 
-//tokenizer tests
+//tokenize tests
 #include <tokenize.h>
 int test1(){
 	TEST_NAME = "test::tokenize::count_until_delim";
@@ -95,7 +95,7 @@ int test12(){
 }
 
 TEST_GENERATE(
-	//tokenizer tests
+	//tokenize tests
 	test1, test2, test3, test4,  test5,  test6,
 	test7, test8, test9, test10, test11, test12
 );
