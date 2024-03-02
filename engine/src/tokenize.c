@@ -56,3 +56,15 @@ int count_until_delim(char* buffer, char* delim){
 	}
 	return -(ptr - buffer);
 }
+
+int back_while_delim(char* buffer, char* delim){
+	char* ptr;
+	char* loc;
+	for(ptr = buffer; *ptr; --ptr){
+		loc = strchr(delim, *ptr);
+		if(!loc)
+			return buffer - ptr;
+	}
+	return -(buffer - ptr);
+}
+
