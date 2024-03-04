@@ -1,283 +1,551 @@
-#include <stdlib.h>
+#include <uci.h>
+#include <getline_noblock.h>
+#include <debug.h>
+
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <threads.h>
 
-#include <debug.h>
-#include <getline_noblock.h>
-#include <uci.h>
-#include <commands.h>
-#include <responses.h>
-#include <tokenize.h>
-#include "commands.c"
-#include "responses.c"
-
-/** DEFINITIONS :) **/
-#define IS_KEYWORD(kw, val) (strcmp(kw, val) == 0)
+/** DEFINITIONS **/
+#define TOKEN_ID(ID) UCI_TOKEN_##ID
 #define DELIM " \t\n"
-#define CHECK_TOKEN(BUF, CMD) check_token(BUF, CMD, DELIM)
-#define COUNT_UNTIL_TOKEN(BUF, CMD) count_until_token(BUF, CMD, DELIM)
-#define COUNT_UNTIL_DELIM(BUF) count_until_delim(BUF, DELIM)
-#define COUNT_WHILE_DELIM(BUF) count_while_delim(BUF, DELIM)
+#define COUNT_UNTIL_DELIM(BUF) uci_count_until_delim(BUF, DELIM)
+#define COUNT_WHILE_DELIM(BUF) uci_count_while_delim(BUF, DELIM)
+#define IS_FLAGGED(NODE) (NODE && uci_token_flags[NODE->id])
+#define CASE_GO_SIMPLE(ID)\
+case TOKEN_ID(ID):\
+	UNFLAG(ID);\
+	if(!node->next)\
+		parsed = 1;\
+	break;
+#define CASE_GO_VARIABLE(ID, VAR)\
+case TOKEN_ID(ID):\
+	UNFLAG(ID);\
+	node = node->next;\
+	if(!node)\
+		goto ABORT;\
+	if(sscanf(node->value, "%i", &VAR) != 1)\
+		goto ABORT;\
+	node->id = UCI_SPEC_TOKEN_STRING;\
+	if(!node->next)\
+		parsed = 1;\
+	break;
+#define FLAG(ID) uci_token_flags[TOKEN_ID(ID)] = 1
+#define UNFLAG(ID) uci_token_flags[TOKEN_ID(ID)] = 0
+#define CALL(ID, CALLER)\
+uci_token_flags[TOKEN_ID(ID)] = TOKEN_ID(CALLER)
+#define CALLER(ID)\
+uci_token_flags[TOKEN_ID(ID)]
 
-typedef enum TokenState TokenState;
-typedef struct ParseData ParseData;
+typedef struct UCIToken UCIToken;
+typedef struct UCITokenList UCITokenList;
+typedef struct UCITokenVector UCITokenVector;
+typedef unsigned char UCIFlag;
 
-/** DATA STRUCTURES :) **/
-enum TokenState{
-	TOKEN_UNDEF    = 0x0000,
-	TOKEN_START    = 0x0001,
-	TOKEN_DEFAULT  = 0x0003,
-	TOKEN_GLOB     = 0x0006,
-	TOKEN_SETOPT   = 0x0002,
-	TOKEN_ID       = 0x0004,
-	TOKEN_VALUE    = 0x0008,
-	TOKEN_DEBUG    = 0x000A,
-	TOKEN_POS      = 0x000C,
-	TOKEN_FEN_STR  = 0x000E,
-	TOKEN_POS_SET  = 0x0005,
-	TOKEN_MOVES    = 0x0007,
-	TOKEN_GO       = 0x000B,
-	TOKEN_DONE     = 0x1111
+/** DATA TYPES **/
+enum UCI_TOKENS{
+	UCI_SPEC_TOKEN_UNDEF,
+	UCI_SPEC_TOKEN_FLAG,
+	UCI_SPEC_TOKEN_STRING,
+	#define X(ID, STR) TOKEN_ID(ID),
+	#include <xcommands.h>
+	#include <xresponses.h>
+	#include <xtokens.h>
+	#undef X
+	UCI_SPEC_TOKEN_COUNT
 };
 
-struct ParseData{
-	char buffer[UCI_INPUT_BUFFER_LEN];
+struct UCIToken{
+	UCIToken* next;
+	int id;
+	char* buffer;
+	char* value;
+};
+
+struct UCITokenList{
+	char* buffer;
+	UCIToken* head;
+	UCIToken* tail;
+};
+
+struct UCITokenVector{
 	int argc;
 	char** argv;
 };
 
-/** PRIVATE FORWARD DECLARATIONS :) **/
-void free_parsedata(ParseData* data);
-int valid_command(char* value);
-int valid_response(char* value);
-int parse_token(char* buffer, TokenState* state);
-int delimit_buffer(char* buffer);
-void copy_tokens(ParseData* data);
-int parse(char* buffer, ParseData* data);
+/** GLOBALS **/
+UCIFlag uci_token_flags[UCI_SPEC_TOKEN_COUNT] = {0};
+UCITokenVector uci_assembled_tokens = {0};
+UCITokenList uci_tokens;
+mtx_t uci_io_mutex;
 
-/** PUBILC LIBRARY FUNCTIONS :) **/
+/** PRIVATE FORWARD DECLARATIONS **/
+void uci_flag_commands();
+void uci_flag_responses();
+void uci_unflag_all();
+int uci_string(UCIToken** node);
+
+int uci_count_while_delim(char* buffer, char* delim);
+int uci_count_until_delim(char* buffer, char* delim);
+
+char* uci_next_arg(UCIToken** token);
+int uci_reassemble_tokens();
+
+UCIToken* uci_new_token(char* value);
+void uci_identify(UCIToken* token);
+void uci_push(UCIToken* node);
+
+int uci_tokenize();
+int uci_parse();
+
+/** PUBLIC FUNCTIONS **/
 int uci_init(){
-	int result;
-	result = getline_noblock_init();
-	return result;
+	getline_noblock_init();
+	if(mtx_init(&uci_io_mutex, mtx_plain) != thrd_success)
+		return 0;
+	return 1;
 }
 
 void uci_destroy(){
-	return;
-}
-
-int uci_respond(char* id, int argc, char** argv){
 	int i;
-	if(!valid_response(id))
-		return 1;
-	printf("%s", id);
-	for(i = 0; i < argc; ++i)
-		printf(" %s", argv[i]);
-	printf("\n");
-	return 0;
+	UCIToken* ptr;
+	UCIToken* garbage;
+	for(i = 0; i < uci_assembled_tokens.argc; ++i)
+		free(uci_assembled_tokens.argv[i]);
+	free(uci_assembled_tokens.argv);
+	ptr = uci_tokens.head;
+	while(ptr){
+		garbage = ptr;
+		ptr = ptr->next;
+		free(garbage);
+	}
+	uci_assembled_tokens.argc = 0;
+	uci_assembled_tokens.argv = NULL;
+	uci_tokens.head = NULL;
+	uci_tokens.tail = NULL;
 }
 
 int uci_poll(int* argc, char*** argv){
-	static char buffer[UCI_INPUT_BUFFER_LEN];
-	static ParseData data = {0};
-	if(data.argc){
-		debug_print("%s\n", "Freeing old parsed data.");
-		free_parsedata(&data);
-	}
-	debug_print("%s\n", "Polling for input.");
+	char buffer[UCI_INPUT_BUFFER_LEN];
+	int result, i;
+	mtx_lock(&uci_io_mutex);
+	uci_destroy();
 	if(!getline_noblock(buffer, UCI_INPUT_BUFFER_LEN)){
-		debug_print("%s\n", "No input detected.");
-		return 0;
+		debug_print("%s", "No input available.");
+		goto ABORT;
 	}
-	debug_print("%s\n", "Input detected.");
-	if(!parse(buffer, &data)){
-		debug_print("%s\n", "Unable to parse input.");
-		return 0;
+	debug_print("%s", "Input detected.");
+	if(!uci_tokenize(buffer))
+		goto ABORT;
+	uci_flag_commands();
+	if(!uci_parse())
+		goto ABORT;
+	if(!uci_reassemble_tokens())
+		goto ABORT;
+	*argc = uci_assembled_tokens.argc;
+	*argv = uci_assembled_tokens.argv;
+	mtx_unlock(&uci_io_mutex);
+	return 1;
+	ABORT:
+	mtx_unlock(&uci_io_mutex);
+	uci_destroy();
+	return 0;
+}
+
+int uci_respond(int argc, char** argv){
+	int i;
+	char d;
+	UCIToken* token;
+	mtx_lock(&uci_io_mutex);
+	uci_destroy();
+	for(i = 0; i < argc; ++i){
+		token = uci_new_token(argv[i]);
+		if(!token)
+			goto ABORT;
+		uci_push(token);
 	}
-	debug_print("%s\n", "Input successfully parsed.");
-	*argc = data.argc;
-	*argv = data.argv;
+	uci_flag_responses();
+	if(!uci_parse())
+		goto ABORT;
+	if(!uci_reassemble_tokens())
+		goto ABORT;
+	argc = uci_assembled_tokens.argc;
+	argv = uci_assembled_tokens.argv;
+	d = ' ';
+	for(i = 0; i < argc; ++i){
+		if(i+1 == argc)
+			d = '\0';
+		printf("%s%c", argv[i], d);
+	}
+	mtx_unlock(&uci_io_mutex);
+	return 1;
+	ABORT:
+	mtx_unlock(&uci_io_mutex);
+	return 0;
+}
+
+/** PRIVATE FUNCTIONS **/
+void uci_flag_commands(){
+	#define X(ID, STR) FLAG(ID);
+	#include <xcommands.h>
+	#undef X
+	#define X(ID, STR) UNFLAG(ID);
+	#include <xresponses.h>
+	#include <xtokens.h>
+	#undef X
+}
+
+void uci_flag_responses(){
+	#define X(ID, STR) FLAG(ID);
+	#include <xresponses.h>
+	#undef X
+	#define X(ID, STR) UNFLAG(ID);
+	#include <xcommands.h>
+	#include <xtokens.h>
+	#undef X
+}
+
+void uci_unflag_all(){
+	#define X(ID, STR) UNFLAG(ID);
+	#include <xcommands.h>
+	#include <xresponses.h>
+	#include <xtokens.h>
+	#undef X
+}
+
+int uci_string(UCIToken** node){
+	if(!*node)
+		return 0;
+	(*node)->id = UCI_SPEC_TOKEN_STRING;
+	if(IS_FLAGGED((*node)->next))
+		return 0;
+	*node = (*node)->next;
 	return 1;
 }
 
-/** PRIVATE LIBRARY FUNCTIONS :) **/
-void free_parsedata(ParseData* data){
-	free(data->argv);
-	data->argc = 0;
-	data->argv = NULL;
-}
-
-int valid_command(char* value){
-	int i;
-	debug_print("Validating command: %s\n", value);
-	for(i = 0; i < UCI_UI_COMMANDS_COUNT; ++i)
-		if(IS_KEYWORD(UCI_UI_COMMANDS[i], value))
-			return 1;
-	return 0;
-}
-
-int valid_response(char* value){
-	int i;
-	debug_print("Validating response: %s\n", value);
-	for(i = 0; i < UCI_UI_RESPONSES_COUNT; ++i)
-		if(IS_KEYWORD(UCI_UI_RESPONSES[i], value))
-			return 1;
-	return 0;
-}
-
-#define REROUTE_TOKEN(TOK, STATE)\
-if(CHECK_TOKEN(buffer, TOK)){\
-	debug_print("%s\n", "Matched token: " #TOK);\
-	*state = STATE;\
-	len = sizeof(TOK)-1;\
-	break;\
-}
-int parse_token(char* buffer, TokenState* state){
-	int len;
-	len = 0;
-	switch(*state){
-	case TOKEN_START:
-		REROUTE_TOKEN(UCI_UI_COMMAND_SETOPTION, TOKEN_SETOPT);
-		REROUTE_TOKEN(UCI_UI_COMMAND_DEBUG, TOKEN_DEBUG);
-		REROUTE_TOKEN(UCI_UI_COMMAND_POSITION, TOKEN_POS);
-		REROUTE_TOKEN(UCI_UI_COMMAND_GO, TOKEN_GO);
-		*state = TOKEN_DEFAULT;
-		goto DEFAULT;
-	case TOKEN_GLOB:
-		*state = TOKEN_DONE;
-		len = strlen(buffer);
-		break;
-	case TOKEN_SETOPT:
-		REROUTE_TOKEN(UCI_UI_COMMAND_SETOPTION_ID, TOKEN_ID);
-		goto ABORT;
-	case TOKEN_ID:
-		len = COUNT_UNTIL_TOKEN(buffer, UCI_UI_COMMAND_SETOPTION_VALUE);
-		if(len < 0){
-			*state = TOKEN_DONE;
-			len = -len;
-		}else{
-			*state = TOKEN_VALUE;
-			len -= 1;
-		}
-		break;
-	case TOKEN_VALUE:
-		REROUTE_TOKEN(UCI_UI_COMMAND_SETOPTION_VALUE, TOKEN_GLOB);
-		goto ABORT;
-	case TOKEN_DEBUG:
-		REROUTE_TOKEN(UCI_UI_COMMAND_DEBUG_ON, TOKEN_DONE);
-		REROUTE_TOKEN(UCI_UI_COMMAND_DEBUG_OFF, TOKEN_DONE);
-		goto ABORT;
-	case TOKEN_POS:
-		REROUTE_TOKEN(UCI_UI_COMMAND_POSITION_FEN, TOKEN_FEN_STR);
-		REROUTE_TOKEN(UCI_UI_COMMAND_POSITION_STARTPOS, TOKEN_POS_SET);
-		goto ABORT;
-	case TOKEN_FEN_STR:
-		//TODO validate fen string
-		*state = TOKEN_POS_SET;
-		goto DEFAULT;
-	case TOKEN_POS_SET:
-		REROUTE_TOKEN(UCI_UI_COMMAND_POSITION_MOVES, TOKEN_MOVES);
-		goto ABORT;
-	case TOKEN_MOVES:
-		//TODO validate move
-		goto DEFAULT;
-	case TOKEN_GO:
-		//TODO REROUTE TOKENS
-		goto DEFAULT;
-	DEFAULT:
-	default:
-		len = COUNT_UNTIL_DELIM(buffer);
-		if(len < 0)
-			len = -len;
-		break;
-	}
-	debug_print("Token of size %i found in: %s\n", len, buffer);
-	return len;
-	ABORT:
-	debug_print("%s\n", "Aborting.");
-	*state = TOKEN_UNDEF;
-	return -strlen(buffer);
-}
-
-int delimit_buffer(char* buffer){
+int uci_count_while_delim(char* buffer, char* delim){
 	char* ptr;
-	int count;
-	int len;
-	TokenState state;
-	debug_print("%s\n", "Delimiting tokens.");
-	ptr = buffer;
-	count = 0;
-	state = TOKEN_START;
-	while(*ptr){
-		len = parse_token(ptr, &state);
-		if(len <= 0){
-			debug_print("%s\n", "Aborting.");
-			count = 0;
-			break;
-		}
-		debug_print("Skipping forward %i characters.\n", len);
-		ptr += len;
-		ptr[0] = '\0';
-		++count;
-		++ptr;
+	char* loc;
+	for(ptr = buffer; *ptr; ++ptr){
+		loc = strchr(delim, *ptr);
+		if(!loc)
+			return ptr - buffer;
 	}
-	return count;
+	return -(ptr - buffer);
 }
 
-void copy_tokens(ParseData* data){
+int uci_count_until_delim(char* buffer, char* delim){
 	char* ptr;
-	int len;
-	int i;
-	debug_print("Copying %i tokens.\n", data->argc);
-	len = 0;
-	ptr = data->buffer;
-	for(i = 0; i < data->argc; ++i){
-		ptr += len;
-		len = COUNT_WHILE_DELIM(ptr);
-		debug_print("Skipping forward %i characters.\n", len);
-		ptr += len;
-		debug_print("Head token: %s\n", ptr);
-		data->argv[i] = ptr;
-		len = strlen(ptr) + 1;
-		debug_print("Skipping forward %i characters.\n", len);
+	char* loc;
+	for(ptr = buffer; *ptr; ++ptr){
+		loc = strchr(delim, *ptr);
+		if(loc)
+			return ptr - buffer;
 	}
+	return -(ptr - buffer);
 }
 
-void copy_buffer(char* buffer, ParseData* data){
-	char* ptr;
-	int len, i;
+char* uci_next_arg(UCIToken** token){
+	size_t size, i;
+	char* buffer;
+	UCIToken* ptr;
+	debug_print("%s", "Constructing next argument.");
+	if((*token)->id != UCI_SPEC_TOKEN_STRING){
+		debug_print("%s", "Non-stringed token found.");
+		size = strlen((*token)->value) + 1;
+		buffer = (char*)malloc(size*sizeof(char));
+		if(!buffer)
+			return NULL;
+		strcpy(buffer, (*token)->value);
+		*token = (*token)->next;
+		return buffer;
+	}
+	debug_print("%s", "Stringed token(s) found.");
+	size = 0;
+	for(ptr = *token; ptr && ptr->id == UCI_SPEC_TOKEN_STRING; ptr = ptr->next){
+		size += strlen(ptr->value) + 1;
+		debug_print("Accumulated discovered size: %li", size);
+	}
+	debug_print("Allocating buffer of size: %li", size);
+	buffer = (char*)malloc(size*sizeof(char));
+	if(!buffer)
+		return NULL;
 	i = 0;
+	while(i < size){
+		strcpy(buffer+i, (*token)->value);
+		i += strlen((*token)->value);
+		buffer[i] = ' ';
+		++i;
+		if(!*token)
+			break;
+		*token = (*token)->next;
+	}
+	buffer[size-1] = '\0';
+	return buffer;
+}
+
+int uci_reassemble_tokens(){
+	int i, j;
+	UCIToken* ptr;
+	debug_print("%s", "Creating vector.");
+	ptr = uci_tokens.head;
+	while(ptr){
+		++uci_assembled_tokens.argc;
+		if(ptr->id != UCI_SPEC_TOKEN_STRING){
+			ptr = ptr->next;
+			continue;
+		}
+		while(ptr && ptr->id == UCI_SPEC_TOKEN_STRING)
+			ptr = ptr->next;
+	}
+	debug_print("Counted %i argument(s).", uci_assembled_tokens.argc);
+	uci_assembled_tokens.argv = (char**)malloc(uci_assembled_tokens.argc*sizeof(char*));
+	if(!uci_assembled_tokens.argv)
+		return 0;
+	ptr = uci_tokens.head;
+	for(i = 0; i < uci_assembled_tokens.argc; ++i){
+		uci_assembled_tokens.argv[i] = uci_next_arg(&(ptr));
+		if(!uci_assembled_tokens.argv[i]){
+			uci_assembled_tokens.argc = i;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+UCIToken* uci_new_token(char* value){
+	UCIToken* token;
+	debug_print("%s", "Allocating new token.");
+	token = (UCIToken*)calloc(1, sizeof(UCIToken));
+	if(!token)
+		return NULL;
+	token->value = value;
+	uci_identify(token);
+	return token;
+}
+
+void uci_identify(UCIToken* token){
+	debug_print("%s", "Identifying token.");
+	#define X(ID, STR)\
+	if(strcmp(token->value, #STR) == 0){\
+		debug_print("Token identified as: %s, %i", #ID, TOKEN_ID(ID));\
+		token->id = TOKEN_ID(ID);\
+		return;\
+	}
+	#include <xcommands.h>
+	#include <xresponses.h>
+	#include <xtokens.h>
+	#undef X
+	debug_print("%s", "Token unidenfied.");
+	token->id = UCI_SPEC_TOKEN_UNDEF;
+}
+
+void uci_push(UCIToken* node){
+	debug_print("%s", "Pushing token onto list.");
+	if(!uci_tokens.head){
+		uci_tokens.head = node;
+		uci_tokens.tail = node;
+		return;
+	}
+	uci_tokens.tail->next = node;
+	uci_tokens.tail = node;
+}
+
+int uci_tokenize(char* buffer){
+	UCIToken* node;
+	size_t buffer_size;
+	int len;
+	char* ptr;
+	char* value;
+	debug_print("%s", "Tokenizing buffer.");
 	for(ptr = buffer; *ptr; ++ptr){
 		len = COUNT_WHILE_DELIM(ptr);
-		if(len < 0) // nothing left to copy
+		if(len < 0) // no tokens left in buffer
 			break;
+		debug_print("Skipping forward %i characters.", len);
 		ptr += len;
 		len = COUNT_UNTIL_DELIM(ptr);
-		if(len < 0) // we read the rest of the buffer
+		if(len < 0) // final token found
 			len = -len;
-		memcpy(data->buffer+i, ptr, len);
-		data->buffer[i+len] = ' ';
-		i += len + 1;
+		value = ptr;
 		ptr += len;
+		ptr[0] = '\0';
+		debug_print("Creating token for value: %s", value);
+		node = uci_new_token(value);
+		if(!node)
+			goto ABORT;
+		uci_push(node);
 	}
-	data->buffer[i] = '\0';
-}
-
-int parse(char* buffer, ParseData* data){
-	copy_buffer(buffer, data);
-	data->argc = delimit_buffer(data->buffer);
-	if(!valid_command(data->buffer)){
-		debug_print("Command '%s' is not valid\n", buffer);
-		goto ABORT;
-	}
-	data->argv = (char**)malloc(data->argc*sizeof(char*));
-	if(!data->argv){
-		debug_print("%s\n", "Failed to allocate vector.");
-		goto ABORT;
-	}
-	copy_tokens(data);
+	debug_print("%s", "Finished tokenization.");
 	return 1;
 	ABORT:
-	free_parsedata(data);
+	debug_print("%s", "Aborting tokenization.");
 	return 0;
 }
+
+int uci_parse(){
+	UCIToken* node;
+	int parsed;
+	debug_print("%s", "Parsing tokens.");
+	for(node = uci_tokens.head, parsed = 0; node && !parsed; node = node->next){
+		debug_print("Reviewing token id: %s, %i", node->value, node->id);
+		if(!IS_FLAGGED(node))
+			goto ABORT;
+		switch(node->id){
+		/* single word commands */
+		case TOKEN_ID(UCI):
+		case TOKEN_ID(ISREADY):
+		case TOKEN_ID(UCINEWGAME):
+		case TOKEN_ID(STOP):
+		case TOKEN_ID(PONDERHIT):
+		case TOKEN_ID(QUIT):
+			parsed = 1;
+		/* complex commands */
+		/* DEBUG */
+		case TOKEN_ID(DEBUG):
+			uci_unflag_all();
+			FLAG(DEBUG_ON);
+			FLAG(DEBUG_OFF);
+			break;
+		case TOKEN_ID(DEBUG_ON):
+		case TOKEN_ID(DEBUG_OFF):
+			UNFLAG(DEBUG_ON);
+			UNFLAG(DEBUG_OFF);
+			parsed = 1;
+			break;
+		/* SETOPTION */
+		case TOKEN_ID(SETOPTION):
+			uci_unflag_all();
+			CALL(NAME, SETOPTION);
+			break;
+		case TOKEN_ID(NAME):
+			node = node->next;
+			if(!node)
+				goto ABORT;
+			if(CALLER(NAME) == TOKEN_ID(SETOPTION))
+				FLAG(SETOPTION_VALUE);
+			UNFLAG(NAME);
+			while(uci_string(&node));
+			if(!node)
+				parsed = 1;
+			break;
+		case TOKEN_ID(SETOPTION_VALUE):
+			UNFLAG(SETOPTION_VALUE);
+			node = node->next;
+			if(!node)
+				goto ABORT;
+			UNFLAG(NAME);
+			while(uci_string(&node));
+			parsed = 1;
+			break;
+		/* GO */
+		case TOKEN_ID(GO):
+			uci_unflag_all();
+			FLAG(GO_SEARCHMOVES);
+			FLAG(GO_PONDER);
+			FLAG(GO_WTIME);
+			FLAG(GO_BTIME);
+			FLAG(GO_WINC);
+			FLAG(GO_BINC);
+			FLAG(GO_MOVESTOGO);
+			FLAG(GO_DEPTH);
+			FLAG(GO_NODES);
+			FLAG(GO_MATE);
+			FLAG(GO_MOVETIME);
+			FLAG(GO_INFINITE);
+			break;
+
+		CASE_GO_SIMPLE(GO_PONDER);
+		CASE_GO_SIMPLE(GO_INFINITE);
+		int i;
+		CASE_GO_VARIABLE(GO_WTIME,     i);
+		CASE_GO_VARIABLE(GO_BTIME,     i);
+		CASE_GO_VARIABLE(GO_WINC,      i);
+		CASE_GO_VARIABLE(GO_BINC,      i);
+		CASE_GO_VARIABLE(GO_MOVETIME,  i);
+		CASE_GO_VARIABLE(GO_MOVESTOGO, i);
+		CASE_GO_VARIABLE(GO_DEPTH,     i);
+		CASE_GO_VARIABLE(GO_NODES,     i);
+		CASE_GO_VARIABLE(GO_MATE,      i);
+
+		case TOKEN_ID(GO_SEARCHMOVES):
+			UNFLAG(GO_SEARCHMOVES);
+			node = node->next;
+			if(!node)
+				goto ABORT;
+			while(uci_string(&node)){
+			/*TODO verify moves are long algebraic*/
+			}
+			if(!node)
+				parsed = 1;
+			break;
+		/* POSITION */
+		case TOKEN_ID(POSITION):
+			uci_unflag_all();
+			FLAG(POSITION_FEN);
+			FLAG(POSITION_STARTPOS);
+			break;
+		case TOKEN_ID(POSITION_STARTPOS):
+			UNFLAG(POSITION_STARTPOS);
+			UNFLAG(POSITION_FEN);
+			break;
+		case TOKEN_ID(POSITION_FEN):
+			UNFLAG(POSITION_STARTPOS);
+			UNFLAG(POSITION_FEN);
+			node = node->next;
+			if(!node)
+				goto ABORT;
+			FLAG(POSITION_MOVES);
+			while(uci_string(&node)){
+			/*TODO verify tokens are fen string*/
+			}
+			break;
+		case TOKEN_ID(POSITION_MOVES):
+			UNFLAG(POSITION_MOVES);
+			node = node->next;
+			if(!node)
+				goto ABORT;
+			while(uci_string(&node)){
+			/*TODO verify moves are long algebraic */
+			}
+			parsed = 1;
+			break;
+		/* REGISTER */
+		case TOKEN_ID(REGISTER):
+			uci_unflag_all();
+			FLAG(REGISTER_LATER);
+			CALL(NAME, REGISTER);
+			FLAG(REGISTER_CODE);
+			break;
+		case TOKEN_ID(REGISTER_LATER):
+			parsed = 1;
+			break;
+		case TOKEN_ID(REGISTER_CODE):
+			UNFLAG(REGISTER_CODE);
+			UNFLAG(REGISTER_LATER);
+			node = node->next;
+			if(!node)
+				goto ABORT;
+			while(uci_string(&node));
+			if(!node)
+				parsed = 1;
+			break;
+		default:
+			debug_print("%s", "Unhandled token.");
+			break;
+		}
+		if(!node)
+			break;
+	}
+	if(node)
+		goto ABORT;
+	if(!parsed)
+		goto ABORT;
+	debug_print("%s", "Finished parsing.");
+	return 1;
+	ABORT:
+	debug_print("%s", "Aborting parsing.");
+	return 0;
+}
+
