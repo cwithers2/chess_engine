@@ -2,6 +2,7 @@
 #include <debug.h>
 
 #include <stdarg.h>
+#include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
 #include <threads.h>
@@ -15,6 +16,11 @@
 #define TAB_REJECT(ID)            TABLE[ID] =  SPEC_UNDEF
 #define TAB_CALLER(ID)            TABLE[ID]
 #define TAB_CALLED(ID, PROTOCOL) (TABLE[ID] == PROTOCOL)
+#define TAB_DIRECT(ID, NEW_ID)\
+do{\
+	TABLE[NEW_ID] = TABLE[ID];\
+	TABLE[ID]  = SPEC_UNDEF;\
+}while(0)
 
 typedef struct UCIToken UCIToken;
 typedef unsigned char UCITokenID;
@@ -49,7 +55,7 @@ UCITokenID TABLE[SPEC_COUNT];
 
 /** PRIVATE FORWARD DECLARES **/
 void* uci_alloc(size_t size);
-UCIToken* uci_new_token(char* value);
+UCIToken* uci_new_token();
 //int uci_iter_uncalled(UCIToken** node);
 void uci_free_tokens(UCIToken* tokens);
 char* uci_next_vector(UCIToken** token);
@@ -58,11 +64,11 @@ int uci_is_number(char* value);
 int uci_is_fen(char* value);
 int uci_is_move(char* value);
 
-void uci_lock();
+int uci_lock();
 void uci_unlock();
 
 void uci_set_input_mode();
-void uci_set_output_move();
+void uci_set_output_mode();
 void uci_clear_table();
 
 size_t uci_count_while_delim(char* buffer);
@@ -102,13 +108,13 @@ int uci_write(char* fmt, ...){
 		goto ABORT;
 	if(!uci_parser(tokens))
 		goto ABORT;
-	printf("%s\n", buffer);
+	printf("%s", buffer);
 	uci_unlock();
-	debug_print("%s\n", "Finished write.");
+	debug_print("%s", "Finished write.");
 	return 1;
 	ABORT:
 	uci_unlock();
-	debug_print("%s\n", "Aborting write.");
+	debug_print("%s", "Aborting write.");
 	return 0;
 }
 
@@ -130,13 +136,13 @@ int uci_parse(char* buffer, int* argc, char*** argv, UCI_PARSE_MODE mode){
 	if(!uci_vectorize(tokens, argc, argv))
 		goto ABORT;
 	uci_unlock();
-	debug_print("%s\n", "Finished parse.");
+	debug_print("%s", "Finished parse.");
 	uci_free_tokens(tokens);
 	return 1;
 	ABORT:
 	uci_unlock();
 	uci_free_tokens(tokens);
-	debug_print("%s\n", "Aborting parse.");
+	debug_print("%s", "Aborting parse.");
 	return 0;
 }
 
@@ -150,21 +156,21 @@ void uci_free_vector(int argc, char** argv){
 /** PRIVATE LIBRARY FUNCTIONS **/
 void* uci_alloc(size_t size){
 	void* data;
-	debug_print("Allocating data of size %li\n", size);
+	debug_print("Allocating data of size %li.", size);
 	data = malloc(size);
 	if(!data)
 		goto ERROR;
-	debug_print("%s\n", "Successful allocation.");
+	debug_print("%s", "Successful allocation.");
 	return data;
 	ERROR:
-	debug_print("%s\n", "Unable to allocate data.");
+	debug_print("%s", "Unable to allocate data.");
 	return NULL;
 }
 
 UCIToken* uci_new_token(){
 	UCIToken* token;
 	size_t len;
-	debug_print("%s\n", "Creating token.");
+	debug_print("%s", "Creating token.");
 	token = uci_alloc(sizeof(UCIToken));
 	if(!token)
 		return NULL;
@@ -250,14 +256,17 @@ int uci_is_move(char* value){
 	return 1;
 }
 
-void uci_lock(){
-	if(mtx_lock(&uci_table_lock) != thrd_success)
-		debug_print("%s\n", "Failed to lock table access.");
+int uci_lock(){
+	if(mtx_lock(&uci_table_lock) != thrd_success){
+		debug_print("%s", "Failed to lock table access.");
+		return 0;
+	}
+	return 1;
 }
 
 void uci_unlock(){
 	if(mtx_unlock(&uci_table_lock) != thrd_success)
-		debug_print("%s\n", "Failed to unlock table access.");
+		debug_print("%s", "Failed to unlock table access.");
 }
 
 void uci_set_input_mode(){
@@ -270,7 +279,7 @@ void uci_set_input_mode(){
 	#undef X
 }
 
-void uci_set_output_move(){
+void uci_set_output_mode(){
 	#define X(ID, STR) TAB_ACCEPT(ID, SPEC_FLAG);
 	#include <xresponses.h>
 	#undef X
@@ -325,9 +334,9 @@ UCIToken* uci_tokenizer(char* buffer){
 		len = uci_count_while_delim(ptr);
 		if(len < 0) // no tokens left in buffer
 			break;
-		debug_print("Skipping forward %i characters.", len);
+		debug_print("Skipping forward %li characters.", len);
 		ptr += len;
-		len = uci_is_fen(ptr);
+		//len = uci_is_fen(ptr);
 		if(!len)
 			len = uci_count_until_delim(ptr);
 		if(len < 0) // final token found
@@ -368,7 +377,7 @@ int uci_lexer(UCIToken* tokens){
 	ptr = tokens;
 	for(ptr = tokens; ptr; ptr = ptr->next){
 		#define X(ID, STR)\
-		if(strcmp(token->value, #STR) == 0){\
+		if(strcmp(ptr->value, #STR) == 0){\
 			LEXER_ASSIGN(ID);\
 			continue;\
 		}
@@ -376,7 +385,7 @@ int uci_lexer(UCIToken* tokens){
 		#include <xresponses.h>
 		#include <xtokens.h>
 		#undef X
-		if(uci_is_fen(ptr->value)){
+/*		if(uci_is_fen(ptr->value)){
 			LEXER_ASSIGN(TYPE_FEN);
 			continue;
 		}
@@ -389,7 +398,9 @@ int uci_lexer(UCIToken* tokens){
 			continue;
 		}
 		LEXER_ASSIGN(SPEC_UNDEF);
+	*/
 	}
+
 	debug_print("%s", "Finished lexing.");
 	return 1;
 }
@@ -405,7 +416,7 @@ int uci_parser(UCIToken* tokens){
 	debug_print("%s", "Parsing tokens.");
 	for(node = tokens; node; node = node->next){
 		debug_print("Reviewing token: %s, %i", node->value, node->id);
-		if(!CALLED(node))
+		if(TAB_CALLER(node->id) == SPEC_UNDEF)
 			goto ABORT;
 		switch(node->id){
 		/* single word commands */
@@ -473,13 +484,13 @@ int uci_parser(UCIToken* tokens){
 				TAB_ACCEPT(CODE, REGISTER);
 			else
 				goto ABORT;
-			TAB_REJECT(NAME);
+			TAB_DIRECT(NAME, TYPE_STRING);
 			node->next->id = TYPE_STRING;
 			break;
 		case VALUE:
 			if(!node->next)
 				goto ABORT;
-			TAB_REJECT(VALUE);
+			TAB_DIRECT(VALUE, TYPE_STRING);
 			node->next->id = TYPE_STRING;
 			break;
 		/* GO */
@@ -500,8 +511,7 @@ int uci_parser(UCIToken* tokens){
 			break;
 		#define CASE_FLAG_NUMBER(ID)\
 		case ID:\
-			TAB_REJECT(ID);\
-			TAB_ACCEPT(TYPE_NUMBER, ID);\
+			TAB_DIRECT(ID, TYPE_NUMBER);\
 			break;
 		CASE_FLAG_NUMBER(WTIME);
 		CASE_FLAG_NUMBER(BTIME);
@@ -513,8 +523,7 @@ int uci_parser(UCIToken* tokens){
 		CASE_FLAG_NUMBER(MATE);
 		#undef CASE_FLAG_NUMBER
 		case SEARCHMOVES:
-			TAB_REJECT(SEARCHMOVES);
-			TAB_ACCEPT(TYPE_MOVE, SEARCHMOVES);
+			TAB_DIRECT(SEARCHMOVES, TYPE_MOVE);
 			break;
 		/* POSITION */
 		case POSITION:
@@ -523,18 +532,15 @@ int uci_parser(UCIToken* tokens){
 			TAB_ACCEPT(STARTPOS, POSITION);
 			break;
 		case STARTPOS:
-			TAB_REJECT(STARTPOS);
 			TAB_REJECT(FEN);
-			TAB_ACCEPT(MOVES, POSITION);
+			TAB_DIRECT(STARTPOS, MOVES);
 			break;
 		case FEN:
 			TAB_REJECT(STARTPOS);
-			TAB_REJECT(FEN);
-			TAB_ACCEPT(TYPE_FEN, POSITION);
+			TAB_DIRECT(FEN, TYPE_FEN);
 			break;
 		case MOVES:
-			TAB_REJECT(MOVES);
-			TAB_ACCEPT(TYPE_MOVE, POSITION);
+			TAB_REDIRECT(MOVES, TYPE_MOVE);
 			break;
 		/* REGISTER */
 		case REGISTER:
@@ -584,11 +590,11 @@ int uci_vectorize(UCIToken* tokens, int* argc, char*** argv){
 	*argc = 0;
 	while(ptr){
 		++(*argc);
-		if(ptr->id != UCI_SPEC_TOKEN_STRING){
+		if(ptr->id != TYPE_STRING){
 			ptr = ptr->next;
 			continue;
 		}
-		while(ptr && ptr->id == UCI_SPEC_TOKEN_STRING)
+		while(ptr && ptr->id == TYPE_STRING)
 			ptr = ptr->next;
 	}
 	debug_print("Counted %i argument(s).", *argc);
