@@ -6,6 +6,7 @@
 #include <respond_lex.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 
 char* uci_next_vector(UCINode** node){
 	size_t size, i;
@@ -48,11 +49,11 @@ char* uci_next_vector(UCINode** node){
 	return NULL;
 }
 
-int uci_vectorize(int* argc, char*** argv){
+void uci_vectorize(int* argc, char*** argv){
 	int i;
 	UCINode* ptr;
 	debug_print("%s", "Vectorizing.");
-	ptr = uci_head.next;
+	ptr = uci_node_head.next;
 	*argc = 0;
 	while(ptr){
 		++(*argc);
@@ -69,7 +70,7 @@ int uci_vectorize(int* argc, char*** argv){
 		*argc = 0;
 		goto ABORT;
 	}
-	ptr = uci_head.next;
+	ptr = uci_node_head.next;
 	for(i = 0; i < *argc; ++i){
 		(*argv)[i] = uci_next_vector(&(ptr));
 		if(!(*argv)[i]){
@@ -77,34 +78,38 @@ int uci_vectorize(int* argc, char*** argv){
 			goto ABORT;
 		}
 	}
-	return 1;
+	return;
 	ABORT:
+	fprintf(stderr, "UCI: OUT OF MEMORY\n");
 	uci_free_vector(*argc, *argv);
-	return 0;
+	uci_node_free();
+	raise(SIGABRT);
 }
 
-int uci_parse(char* buffer, int* argc, char*** argv){
-	uci_node_free();
+int uci_parse(const char* buffer, int* argc, char*** argv){
+	int result;
 	command_scan_string(buffer);
 	debug_print("%s", "Parsing buffer.");
-	if(commandparse() != 0){
+	result = commandparse();
+	commandlex_destroy();
+	if(result != 0){
 		debug_print("%s", "Failed to parse.");
 		return 0;
 	}
-	if(!uci_vectorize(argc, argv))
-		return 0;
+	uci_vectorize(argc, argv);
+	uci_node_free();
 	debug_print("%s", "Success: uci_parse.");
 	return 1;
 }
 
-int uci_write(char* buffer){
+int uci_write(const char* buffer){
 	respond_scan_string(buffer);
 	if(!respondlex())
 		return 0;
-	return printf("%s", buffer) > 0;
+	return printf("%s\n", buffer) > 0;
 }
 
-void uci_free_vector(int argc, char** argv){
+void uci_free_vector(const int argc, char** argv){
 	int i;
 	for(i = 0; i < argc; ++i)
 		free(argv[i]);

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "include/uci.h"
 
-#define RESPOND
+//#define RESPOND
 
 int main(int argc, char** argv){
 	char buffer[256];
@@ -15,6 +15,7 @@ int main(int argc, char** argv){
 	printf("TOKENS: %i\n", argc);
 	for(int i = 0; i < argc; ++i)
 		printf("%i: %s\n", i, argv[i]);
+	uci_free_vector(argc, argv);
 #endif
 	return 0;
 }

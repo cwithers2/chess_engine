@@ -11,7 +11,7 @@ LIBRARY   = libuci.a
 GENERATED = $(SRC_DIR)command_parse.c $(SRC_DIR)command_lex.c $(SRC_DIR)respond_lex.c $(INC_DIR)command_parse.h $(INC_DIR)command_lex.h $(INC_DIR)respond_lex.h
 EXAMPLE   = example
 
-CFLAGS   := $(CFLAGS) -Iinclude
+CFLAGS   := $(CFLAGS) -Iinclude -DNO_DEBUG
 
 build: $(LIBRARY)
 

@@ -9,8 +9,8 @@ struct UCINode{
 	int id;
 };
 
-extern UCINode  uci_head;
-extern UCINode* uci_tail;
+extern UCINode  uci_node_head;
+extern UCINode* uci_node_tail;
 
 void uci_node_push_or_die(const char* value, int id);
 void uci_node_free();
