@@ -1,8 +1,8 @@
 %option noyywrap
 S                   [ \t\n]+
 
-_rank               [1-8]
-_file               [a-h]
+_file               [1-8]
+_rank               [a-h]
 _promote            [nbrq]
 _coord              {_rank}{_file}
 MOVE                {_coord}{2}{_promote}?
