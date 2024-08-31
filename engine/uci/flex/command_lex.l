@@ -34,10 +34,10 @@ if(!FLAGGED(X))\
 
 S                   [ \t\n]+
 
-_file               [1-8]
-_rank               [a-h]
+_rank               [1-8]
+_file               [a-h]
 _promote            [nbrq]
-_coord              {_rank}{_file}
+_coord              {_file}{_rank}
 MOVE                {_coord}{2}{_promote}?
 
 _digit              [0-9]
