@@ -1,0 +1,7 @@
+//SIDE   PIECE   CHAR
+X(WHITE, PAWN,   'P')
+X(WHITE, KNIGHT, 'N')
+X(WHITE, BISHOP, 'B')
+X(WHITE, ROOK,   'R')
+X(WHITE, QUEEN,  'Q')
+X(WHITE, KING,   'K')

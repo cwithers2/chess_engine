@@ -1,0 +1,8 @@
+X(BLACK, 'a')
+X(BLACK, 'b')
+X(BLACK, 'c')
+X(BLACK, 'd')
+X(BLACK, 'e')
+X(BLACK, 'f')
+X(BLACK, 'g')
+X(BLACK, 'h')

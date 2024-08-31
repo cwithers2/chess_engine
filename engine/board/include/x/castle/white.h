@@ -1,0 +1,8 @@
+X(WHITE, 'A')
+X(WHITE, 'B')
+X(WHITE, 'C')
+X(WHITE, 'D')
+X(WHITE, 'E')
+X(WHITE, 'F')
+X(WHITE, 'G')
+X(WHITE, 'H')
