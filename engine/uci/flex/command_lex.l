@@ -9,7 +9,9 @@ do{\
 }while(0)
 
 #include <command_parse.h>
-
+#include <fen_parse.h>
+int fen_scan_string(const char*);
+void fenlex_destroy();
 #define FLAG(X)       flags[X-SPEC_FIRST+1]  = 1
 #define UNFLAG(X)     flags[X-SPEC_FIRST+1]  = 0
 #define FLAGGED(X)   (flags[X-SPEC_FIRST+1] != 0)
@@ -64,6 +66,15 @@ SUBSTR              [^ \t\n]+
 }
 <*>{FEN} {
 	RESOLVE_STRING(TYPE_FEN);
+	//token is not a string if the control reaches this point.
+	int result;
+	fen_scan_string(commandtext);
+	result = fenparse();
+	if(result){
+		//error.
+		fenlex_destroy();
+		return commandtext[0];
+	}
 	LEX(TYPE_FEN);
 }
 

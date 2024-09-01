@@ -5,10 +5,10 @@ OBJ_DIR   = ./obj/
 FLEX_DIR  = ./flex/
 BISON_DIR = ./bison/
 
-objects   = command_parse.o command_lex.o respond_lex.o uci.o uci_node.o
+objects   = fen_parse.o fen_lex.o command_parse.o command_lex.o respond_lex.o uci.o uci_node.o
 OBJECTS   = $(addprefix $(OBJ_DIR), $(objects))
 LIBRARY   = libuci.a
-GENERATED = $(SRC_DIR)command_parse.c $(SRC_DIR)command_lex.c $(SRC_DIR)respond_lex.c $(INC_DIR)command_parse.h $(INC_DIR)command_lex.h $(INC_DIR)respond_lex.h
+GENERATED = $(SRC_DIR)command_parse.c $(SRC_DIR)command_lex.c $(SRC_DIR)respond_lex.c $(INC_DIR)command_parse.h $(INC_DIR)command_lex.h $(INC_DIR)respond_lex.h $(SRC_DIR)fen_parse.c $(INC_DIR)fen_parse.h $(INC_DIR)fen_lex.h $(SRC_DIR)fen_lex.c
 EXAMPLE   = example
 
 CFLAGS   := $(CFLAGS) -Iinclude -DNO_DEBUG
@@ -31,6 +31,18 @@ $(SRC_DIR)command_lex.c: $(FLEX_DIR)command_lex.l
 	flex --outfile=$@ \
 	     --prefix=command \
 	     --header-file=$(INC_DIR)command_lex.h \
+	     $<
+
+$(SRC_DIR)fen_parse.c: $(BISON_DIR)fen_parse.y
+	bison --defines=$(INC_DIR)fen_parse.h \
+	      --name-prefix=fen \
+	      --output=$(SRC_DIR)fen_parse.c \
+	      $<
+
+$(SRC_DIR)fen_lex.c: $(FLEX_DIR)fen_lex.l
+	flex --outfile=$@ \
+	     --prefix=fen \
+	     --header-file=$(INC_DIR)fen_lex.h \
 	     $<
 
 $(SRC_DIR)respond_lex.c: $(FLEX_DIR)respond_lex.l
