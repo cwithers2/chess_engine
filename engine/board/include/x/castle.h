@@ -1,5 +1,0 @@
-//SIDE   PIECE   CHAR
-X(WHITE, QUEEN,  'Q')
-X(WHITE, KING,   'K')
-X(BLACK, QUEEN,  'q')
-X(BLACK, KING,   'k')

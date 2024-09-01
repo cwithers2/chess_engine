@@ -4,45 +4,44 @@
 
 #include <debug.h>
 
-//#define POS(F,R) F&R
-/*
-struct BoardMove{
-	u8  side;
-	u8  beg_piece;
-	u8  end_piece;
-	u64 beg;
-	u64 end;
-};
+#define FEN_SKIP_1 '1'
+#define FEN_SKIP_2 '2'
+#define FEN_SKIP_3 '3'
+#define FEN_SKIP_4 '4'
+#define FEN_SKIP_5 '5'
+#define FEN_SKIP_6 '6'
+#define FEN_SKIP_7 '7'
+#define FEN_SKIP_8 '8'
+#define FEN_DASH   '-'
+#define FEN_SLASH  '/'
 
-typedef struct BoardPieceNode BoardPieceNode;
-struct BoardPiece{
-	u8  piece;
-	u64 place;
-	u64 moves;
-};
-struct BoardPieceNode{
-	BoardPieceNode* next;
-	BoardPiece data;
-};*/
-
-u64 board_bitboard(Board* board, u8 side){
-	u64 result = 0;
-	switch(side){
-	#define X(SIDE, PIECE, CHAR) result |= board->pieces[SIDE][PIECE];
-	case WHITE:
-		#include <x/white.h>
-		break;
-	case BLACK:
-		#include <x/black.h>
-		break;
-	default:
-		#include <x/white.h>
-		#include <x/black.h>
-		break;
+enum FEN_FILES{
+	#define X(F, BITS, CHAR) FEN_FILE_##F = CHAR,
+	#include <x/file.h>
 	#undef X
-	}
-	return result;
-}
+};
+
+enum FEN_RANKS{
+	#define X(R, BITS, CHAR) FEN_RANK_##R = CHAR,
+	#include <x/rank.h>
+	#undef X
+};
+
+struct Board{
+	u64  pieces[SIDES][PIECES];
+	char castle[SIDES][2];
+	char active;
+	char target[2];
+	u16  halfmoves;
+	u16  fullmoves;
+};
+
+struct BoardMove{
+	int piece;
+	int promotion;
+	u64 from;
+	u64 to;
+};
 
 int board_fen_pieces(Board* board, const char* pieces){
 	unsigned char rank;
@@ -270,102 +269,5 @@ int board_new(Board* board, const char* fen){
 //test
 int board_copy(Board* copy, const Board* original){
 	return memcpy(copy, original, sizeof(Board));
-}
-
-u64 fill(u64 attackers){
-}
-
-u64 occludedFill(u64 attackers, u64 blockers){
-}
-
-//Kogge-Stone algorithm
-#define KOGGE_STONE(OP, MASK, V1, V2, V3)\
-empty  &= ~MASK;\
-pieces |= empty & (pieces OP V1);\
-empty  &=         (empty  OP V1);\
-pieces |= empty & (pieces OP V2);\
-empty  &=         (empty  OP V2);\
-pieces |= empty & (pieces OP V3);\
-return    ~MASK & (pieces OP V1);
-//test
-u64 board_n_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(<<, 0, 8, 16, 32);
-}
-//test
-u64 board_s_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(>>, 0, 8, 16, 32);
-}
-//test
-u64 board_e_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(<<, FILE_A, 1, 2, 4);
-}
-//test
-u64 board_w_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(>>, FILE_H, 1, 2, 4);
-}
-//test
-u64 board_ne_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(<<, FILE_A, 9, 18, 36);
-}
-//test
-u64 board_se_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(>>, FILE_A, 7, 14, 28);
-}
-//test
-u64 board_nw_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(<<, FILE_H, 7, 14, 28);
-}
-//test
-u64 board_sw_attacks(u64 pieces, u64 empty){
-	KOGGE_STONE(>>, FILE_H, 9, 18, 36);
-}
-
-u8 board_count_bits(u64 x){
-	u8 result;
-	for(result = 0; x; result++)
-		x &= x - 1;
-	return result;
-}
-
-//test
-//pos should reset to zero after visiting each bit
-u64 iterate_bits(u64 x, u64 pos){
-	u64 mask, alt;
-	mask = ~(pos | (pos-1));
-	alt = mask & x;
-	return alt & -alt;
-}
-
-int board_list(Board* board, u8 side, BoardMoveNode* head){
-//FOR SLIDERS
-//* get piece mask
-//** board->pieces[SLIDER]
-//* get empty mask
-//** get all piece mask
-//** invert all piece mask
-//* slider_attacks(piece mask, empty mask)
-	u64 length;
-	u64 piece;
-	u64 bboard;
-
-	length = 0;
-	piece  = NULL;
-	#define FOR_SLIDER(P, T) \
-		for(P = iterate_bits(T, P);\
-			P; P = iterate_bits(T, P))
-//bishops
-	FOR_SLIDER(piece, board->pieces[side][BISHOP]){
-		//do stuff
-		bboard = 
-		++length;
-	}
-//rooks
-//queens
-
-}
-
-int board_play(Board* board, BoardMoveNode* move){
-//	board->pieces[move->beg_piece] &= ~(move->beg);
-//	board->pieces[move->end_piece] |=  (move->end);
 }
 
