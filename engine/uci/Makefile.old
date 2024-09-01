@@ -21,17 +21,35 @@ example: $(LIBRARY) example.c
 $(LIBRARY): $(OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^
 
-$(SRC_DIR)%.c: $(FLEX_DIR)%.l
+$(SRC_DIR)command_parse.c: $(BISON_DIR)command_parse.y
+	bison --defines=$(INC_DIR)command_parse.h \
+	      --name-prefix=command \
+	      --output=$(SRC_DIR)command_parse.c \
+	      $<
+
+$(SRC_DIR)command_lex.c: $(FLEX_DIR)command_lex.l
 	flex --outfile=$@ \
-	     --prefix=$(word 1, $(subst _, ,$(notdir $<))) \
-	     --header-file=$(INC_DIR)$(notdir $(basename $<)).h \
+	     --prefix=command \
+	     --header-file=$(INC_DIR)command_lex.h \
 	     $<
 
-$(SRC_DIR)%.c: $(BISON_DIR)%.y
-	bison --defines=$(INC_DIR)$(notdir $(basename $<)).h \
-	      --name-prefix=$(word 1, $(subst _, ,$(notdir $<))) \
-	      --output=$@ \
+$(SRC_DIR)fen_parse.c: $(BISON_DIR)fen_parse.y
+	bison --defines=$(INC_DIR)fen_parse.h \
+	      --name-prefix=fen \
+	      --output=$(SRC_DIR)fen_parse.c \
 	      $<
+
+$(SRC_DIR)fen_lex.c: $(FLEX_DIR)fen_lex.l
+	flex --outfile=$@ \
+	     --prefix=fen \
+	     --header-file=$(INC_DIR)fen_lex.h \
+	     $<
+
+$(SRC_DIR)respond_lex.c: $(FLEX_DIR)respond_lex.l
+	flex --outfile=$@ \
+	     --prefix=respond \
+	     --header-file=$(INC_DIR)respond_lex.h \
+	     $<
 
 $(OBJ_DIR)%.o: $(SRC_DIR)%.c
 	@mkdir -p $(OBJ_DIR)

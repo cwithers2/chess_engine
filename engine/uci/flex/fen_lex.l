@@ -15,6 +15,7 @@ CASTLE     [kqKQ]
 EN_PASSANT [a-h][36]
 SLASH      \/
 DASH       \-
+EMPTY      [1-8]
 DIGIT      [0-9]
 NUMBER     {DIGIT}+
 SPACE      [ \t]+
@@ -30,7 +31,7 @@ SPACE      [ \t]+
 <INITIAL>{PIECE} {
 	return TOKEN_PIECE;
 }
-<INITIAL>{NUMBER} {
+<INITIAL>{EMPTY} {
 	repeat = atoi(fentext)-1;
 	return TOKEN_PIECE;
 }
