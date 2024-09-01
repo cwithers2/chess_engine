@@ -47,7 +47,7 @@ NUM                 {_digit}+
 
 _fen1               ([pnbrqkPNBRQK1-8]+\/){7}([pnbrqkPNBRQK1-8]+)
 _fen2               [wb]
-_fen3               ([kqKQ]{1,4})|-
+_fen3               ([kqKQ]{1,4})|([a-hA-H]{1,4})|-
 _fen4               ([a-h][36])|-
 FEN                 {_fen1}{S}{_fen2}{S}{_fen3}{S}{_fen4}{S}{NUM}{S}{NUM}
 

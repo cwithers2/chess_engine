@@ -2,6 +2,26 @@
 %{
 #include <stdlib.h>
 #include <fen_parse.h>
+
+char castle_tally[2];
+char castle_cache[2];
+int  castle_index;
+#include <ctype.h>
+#define UPDATE_CASTLE(C) \
+do{\
+	castle_index = islower(C)?1:0;\
+	if(castle_cache[castle_index] == C)\
+		return C;\
+	castle_cache[castle_index] = C;\
+	if(castle_tally[castle_index] >= 2)\
+		return C;\
+	++castle_tally[castle_index];\
+}while(0)
+#define RESET_CASTLE() \
+do{\
+	memset(castle_tally,0,2);\
+	memset(castle_cache,0,2);\
+}while(0)
 %}
 %s FIELD_2
 %s FIELD_3
@@ -11,7 +31,7 @@
 %s FIELD_ERROR
 PIECE      [pnbrqkPNBRQK]
 PLAYER     [\-wb]
-CASTLE     [kqKQ]
+CASTLE     [kqKQ]|[a-h]|[A-H]
 EN_PASSANT [a-h][36]
 SLASH      \/
 DASH       \-
@@ -39,9 +59,11 @@ SPACE      [ \t]+
 	return TOKEN_SLASH;
 }
 <FIELD_2>{PLAYER} {
+	RESET_CASTLE();
 	return TOKEN_PLAYER;
 }
 <FIELD_3>{CASTLE} {
+	UPDATE_CASTLE(fentext[0]);
 	return TOKEN_CASTLE;
 }
 <FIELD_3>{DASH} {
