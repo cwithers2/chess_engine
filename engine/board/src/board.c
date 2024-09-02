@@ -1,15 +1,10 @@
 /* All algorithms in this file assume well formed FEN strings that
  * were already validated by some other operation (possibly the UCI library). */ 
-#include <debug.h>
 #include <board.h>
+#include <debug.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdint.h>
-
-typedef uint64_t u64;
-typedef uint32_t u32;
-typedef uint16_t u16;
-typedef uint8_t  u8;
 
 #define FEN_SKIP_1 '1'
 #define FEN_SKIP_2 '2'
@@ -32,23 +27,6 @@ enum FEN_RANKS{
 	#define X(R, BITS, CHAR) FEN_RANK_##R = CHAR,
 	#include <x/rank.h>
 	#undef X
-};
-
-struct Board{
-	u64  pieces[SIDES][PIECES];
-	char castle[SIDES][2];
-	char active;
-	char target[2];
-	u16  halfmoves;
-	u16  fullmoves;
-};
-
-struct BoardMove{
-	u8 side;
-	u8 piece;
-	u8 promotion;
-	u64 from;
-	u64 to;
 };
 
 int board_fen_pieces(Board* board, const char* pieces){
@@ -129,6 +107,7 @@ int board_fen_castle(Board* board, const char* castle){
 			break;
 		#include <x/castle/remap.h>
 		#undef X
+		}
 		++ptr;
 	}
 	return 1;
@@ -141,11 +120,6 @@ int board_fen_target(Board* board, const char* target){
 	return 1;
 }
 
-#define SCAN(TYPE, VAL)\
-do{\
-	sscanf(ptr, " %n" TYPE "%n", &advance, VAL, &advance);\
-	ptr += advance;\
-}while(0)
 int board_new(Board* board, const char* fen){
 	int advance;
 	const char* ptr;
@@ -157,7 +131,7 @@ int board_new(Board* board, const char* fen){
 	char space[2];
 	u16 halfmoves;
 	u16 fullmoves;
-	memset(board, NULL, sizeof(Board));
+	memset(board, 0, sizeof(Board));
 	if(!fen)
 		head = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 	else
@@ -192,7 +166,6 @@ int board_new(Board* board, const char* fen){
 	return 1;
 }
 
-//test
 int board_copy(Board* copy, const Board* original){
 	memcpy(copy, original, sizeof(Board));
 	return 1;
@@ -208,6 +181,14 @@ int board_set(Board* board, u8 side, u8 piece, u64 position){
 	return 1;
 }
 
+int board_clr(Board* board, u8 side, u64 position){
+	#define X(PIECE) \
+	board_rem(board, side, PIECE, position);
+	#include <x/piece.h>
+	#undef X
+	return 1;
+}
+
 int board_play(Board* board, BoardMove* move){
 	char file_lookup[] = {'A', 'a'};
 	u64  rank_lookup[] = {RANK_1, RANK_8};
@@ -217,13 +198,14 @@ int board_play(Board* board, BoardMove* move){
 		memset(board->castle[move->side], 0, 2);
 	if(move->piece == ROOK){
 		for(i = 0; i < 2; ++i){
-			pos = rank_lookup &
-				(FILE_A * (file_lookup[i] - board->castle[side][i] + 1));
+			pos = rank_lookup[i] &
+				(FILE_A * (file_lookup[i] - board->castle[move->side][i] + 1));
 			if(pos == move->from)
 				board->castle[move->side][i] = 0;
 		}
 	}
 	board_rem(board, move->side, move->piece, move->from);
 	board_set(board, move->side, move->promotion, move->to);
+	board_clr(board, !(move->side), move->to);
 	return 1;
 }

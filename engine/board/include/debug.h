@@ -23,8 +23,8 @@ void debug_print_board(Board* board){
 				focus >>= 1;\
 				continue;\
 			}
-			#include <x/white.h>
-			#include <x/black.h>
+			#include "x/white.h"
+			#include "x/black.h"
 			#undef X
 			buffer[index++] = '.';
 			focus >>= 1;
@@ -36,7 +36,7 @@ void debug_print_board(Board* board){
 	#define X(SIDE, CHAR)\
 	if(board->active == CHAR)\
 		debug_print("%s", "ACTIVE : " #SIDE);
-	#include <x/side.h>
+	#include "x/side.h"
 	#undef X
 	debug_print(
 		"CASTLE : %c%c%c%c",
