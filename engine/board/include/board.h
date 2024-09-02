@@ -37,24 +37,23 @@ typedef struct Board Board;
 typedef struct BoardMove BoardMove;
 
 struct Board{
-	u64  pieces[SIDES][PIECES];
-	char castle[SIDES][2];
-	char active;
-	char target[2];
-	u16  halfmoves;
-	u16  fullmoves;
+	u64 pieces[SIDES][PIECES];
+	u64 castle[SIDES];
+	u8  active;
+	u64 target;
+	u16 halfmoves;
+	u16 fullmoves;
 };
 
 struct BoardMove{
-	u8 side;
 	u8 piece;
 	u8 promotion;
 	u64 from;
 	u64 to;
 };
 
-int board_new(Board* board, const char* fen);
-int board_copy(Board* copy, const Board* original);
-int board_play(Board* board, BoardMove* move);
+void board_new(Board* board, const char* fen);
+void board_copy(Board* copy, const Board* original);
+void board_play(Board* board, BoardMove* move);
 
 #endif

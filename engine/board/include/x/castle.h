@@ -1,0 +1,4 @@
+X(WHITE, 'Q', RANK_1 & FILE_A)
+X(WHITE, 'K', RANK_1 & FILE_H)
+X(BLACK, 'q', RANK_8 & FILE_A)
+X(BLACK, 'k', RANK_8 & FILE_H)

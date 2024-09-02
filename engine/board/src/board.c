@@ -29,7 +29,7 @@ enum FEN_RANKS{
 	#undef X
 };
 
-int board_fen_pieces(Board* board, const char* pieces){
+void board_fen_pieces(Board* board, const char* pieces){
 	unsigned char rank;
 	unsigned char file;
 	const char* ptr;
@@ -68,59 +68,64 @@ int board_fen_pieces(Board* board, const char* pieces){
 			break;
 		++ptr;
 	}
-	return 1;
 }
 
-int board_fen_active(Board* board, const char active){
+void board_fen_active(Board* board, const char active){
 	switch(active){
 	#define X(SIDE, CHAR)\
 	case CHAR:\
-		board->active = CHAR;\
+		board->active = SIDE;\
 		break;
 	#include <x/side.h>
 	#undef X
 	}
-	return 1;
 }
 
-int board_fen_castle(Board* board, const char* castle){
-	u8 indices[SIDES] = {0};
-	u8 index;
+void board_fen_castle(Board* board, const char* castle){
 	const char* ptr;
 	if(castle[0] == FEN_DASH)
-		return 1;
+		return;
 	ptr = castle;
 	while(*ptr){
 		switch(*ptr){
-		#define X(SIDE, CHAR)\
+		#define X(SIDE, CHAR, POS)\
 		case CHAR:\
-			index = indices[SIDE]++;\
-			board->castle[SIDE][index] = CHAR;\
+			board->castle[SIDE] |= POS;\
 			break;
-		#include <x/castle/white.h>
-		#include <x/castle/black.h>
-		#undef X
-		#define X(SIDE, OLD, NEW)\
-		case OLD:\
-			index = indices[SIDE]++;\
-			board->castle[SIDE][index] = NEW;\
-			break;
-		#include <x/castle/remap.h>
+		#include <x/castle.h>
+		#include <x/castle_extended.h>
 		#undef X
 		}
 		++ptr;
 	}
-	return 1;
 }
 
-int board_fen_target(Board* board, const char* target){
-	if(target[0] == FEN_DASH)
-		return 1;
-	memcpy(board->target, target, 2);
-	return 1;
+void board_fen_target(Board* board, const char* target){
+	u64 rank, file;
+	if(target[0] == FEN_DASH){
+		board->target = 0;
+		return;
+	}
+	switch(target[0]){
+	#define X(FILE, BITS, CHAR)\
+	case CHAR:\
+		file = BITS;\
+		break;
+	#include <x/file.h>
+	#undef X
+	}
+	switch(target[1]){
+	#define X(RANK, BITS, CHAR)\
+	case CHAR:\
+		rank = BITS;\
+		break;
+	#include <x/rank.h>
+	#undef X
+	}
+	board->target = file & rank;
 }
 
-int board_new(Board* board, const char* fen){
+void board_new(Board* board, const char* fen){
 	int advance;
 	const char* ptr;
 	const char* head;
@@ -162,50 +167,37 @@ int board_new(Board* board, const char* fen){
 	board->fullmoves = fullmoves;
 	#undef SCAN
 	debug_print_board(board);
-
-	return 1;
 }
 
-int board_copy(Board* copy, const Board* original){
+void board_copy(Board* copy, const Board* original){
 	memcpy(copy, original, sizeof(Board));
-	return 1;
 }
 
-int board_rem(Board* board, u8 side, u8 piece, u64 position){
-	board->pieces[side][piece] &= ~position;
-	return 1;
-}
-
-int board_set(Board* board, u8 side, u8 piece, u64 position){
-	board->pieces[side][piece] |= position;
-	return 1;
-}
-
-int board_clr(Board* board, u8 side, u64 position){
-	#define X(PIECE) \
-	board_rem(board, side, PIECE, position);
-	#include <x/piece.h>
-	#undef X
-	return 1;
-}
-
-int board_play(Board* board, BoardMove* move){
-	char file_lookup[] = {'A', 'a'};
-	u64  rank_lookup[] = {RANK_1, RANK_8};
-	u64 pos;
+void board_play(Board* board, BoardMove* move){
+	u64 home_lookup[] = {RANK_2, RANK_7};
+	u64 move_lookup[] = {RANK_4, RANK_5};
 	int i;
 	if(move->piece == KING)
-		memset(board->castle[move->side], 0, 2);
-	if(move->piece == ROOK){
-		for(i = 0; i < 2; ++i){
-			pos = rank_lookup[i] &
-				(FILE_A * (file_lookup[i] - board->castle[move->side][i] + 1));
-			if(pos == move->from)
-				board->castle[move->side][i] = 0;
-		}
-	}
-	board_rem(board, move->side, move->piece, move->from);
-	board_set(board, move->side, move->promotion, move->to);
-	board_clr(board, !(move->side), move->to);
-	return 1;
+		board->castle[board->active] = 0;
+	if(move->piece == ROOK)
+		for(i = 0; i < 2; ++i)
+			if(board->castle[board->active] & move->from)
+				board->castle[board->active] &= ~(move->from);
+	board->target = 0;
+	if(move->piece == PAWN)
+		if( (move->from & home_lookup[board->active]) &&
+		    (move->to   & move_lookup[board->active]) )
+			board->target = move->to;
+	if(move->to & board->castle[!(board->active)])
+		board->castle[!(board->active)] &= ~(move->to);
+	board->pieces[board->active][move->piece] &= ~(move->from);
+	board->pieces[board->active][move->promotion] |= move->to;
+	#define X(PIECE) \
+	board->pieces[!(board->active)][PIECE] &= ~(move->to);
+	#include <x/piece.h>
+	#undef X
+	if(board->active == BLACK)
+		board->fullmoves += 1;
+	board->halfmoves += 1;
+	board->active = !(board->active);
 }
