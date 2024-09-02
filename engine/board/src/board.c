@@ -1,8 +1,15 @@
+/* All algorithms in this file assume well formed FEN strings that
+ * were already validated by some other operation (possibly the UCI library). */ 
+#include <debug.h>
 #include <board.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
-#include <debug.h>
+typedef uint64_t u64;
+typedef uint32_t u32;
+typedef uint16_t u16;
+typedef uint8_t  u8;
 
 #define FEN_SKIP_1 '1'
 #define FEN_SKIP_2 '2'
@@ -37,8 +44,9 @@ struct Board{
 };
 
 struct BoardMove{
-	int piece;
-	int promotion;
+	u8 side;
+	u8 piece;
+	u8 promotion;
 	u64 from;
 	u64 to;
 };
@@ -75,37 +83,14 @@ int board_fen_pieces(Board* board, const char* pieces){
 			CASE_NUM(FEN_SKIP_7);
 			CASE_NUM(FEN_SKIP_8);
 			#undef CASE_NUM
-			default:
-				debug_print(
-					"Unidentified piece '%c' at %c%c.",
-					*ptr, file, rank);
-				goto ABORT;
 			}
 			++ptr;
 		}
-		if(file-1 > FEN_FILE_H){
-			debug_print("File out of bounds by %i.", file-1-FEN_FILE_H);
-			goto ABORT;
-		}
 		if(!*ptr)
 			break;
-		if(*ptr != FEN_SLASH){
-			debug_print("Expected '%c', but got: %c.", FEN_SLASH, *ptr);
-			goto ABORT;
-		}
 		++ptr;
 	}
-	if(rank < FEN_RANK_1){
-		debug_print("%s", "Too many ranks defined.");
-		goto ABORT;
-	}
-	if(rank > FEN_RANK_1){
-		debug_print("Missing data for rank %c.", rank-1);
-		goto ABORT;
-	}
 	return 1;
-	ABORT:
-	return 0;
 }
 
 int board_fen_active(Board* board, const char active){
@@ -116,37 +101,22 @@ int board_fen_active(Board* board, const char active){
 		break;
 	#include <x/side.h>
 	#undef X
-	default:
-		debug_print("Unidentified active player '%c'.", active);
-		goto ABORT;
 	}
 	return 1;
-	ABORT:
-	return 0;
 }
 
 int board_fen_castle(Board* board, const char* castle){
 	u8 indices[SIDES] = {0};
-	char cache[SIDES] = {0};
 	u8 index;
-	size_t len;
 	const char* ptr;
-	len = strlen(castle);
-	if(len == 1 && *castle == FEN_DASH)
+	if(castle[0] == FEN_DASH)
 		return 1;
-	if(len > 4){
-		//error
-		goto ABORT;
-	}
 	ptr = castle;
 	while(*ptr){
 		switch(*ptr){
 		#define X(SIDE, CHAR)\
 		case CHAR:\
-			if(CHAR == cache[SIDE]) goto OVERFLOW;\
-			cache[SIDE] = CHAR;\
 			index = indices[SIDE]++;\
-			if(index >= 2) goto OVERFLOW;\
 			board->castle[SIDE][index] = CHAR;\
 			break;
 		#include <x/castle/white.h>
@@ -154,56 +124,27 @@ int board_fen_castle(Board* board, const char* castle){
 		#undef X
 		#define X(SIDE, OLD, NEW)\
 		case OLD:\
-			if(NEW == cache[SIDE]) goto OVERFLOW;\
-			cache[SIDE] = NEW;\
 			index = indices[SIDE]++;\
-			if(index >= 2) goto OVERFLOW;\
 			board->castle[SIDE][index] = NEW;\
 			break;
 		#include <x/castle/remap.h>
 		#undef X
-		default:
-			debug_print("Unidentified castle '%c'.", *ptr);
-			goto ABORT;
-		}
 		++ptr;
 	}
 	return 1;
-	OVERFLOW:
-	debug_print("Overflow castle '%c'.", *ptr);
-	ABORT:
-	return 0;
 }
 
 int board_fen_target(Board* board, const char* target){
-	if(!target[1] && *target == FEN_DASH)
+	if(target[0] == FEN_DASH)
 		return 1;
-	if((target[0] <  FEN_FILE_A)||(target[0] >  FEN_FILE_H))
-		goto ABORT;
-	if((target[1] != FEN_RANK_3)&&(target[1] != FEN_RANK_6))
-		goto ABORT;
 	memcpy(board->target, target, 2);
 	return 1;
-	ABORT:
-	debug_print("Invalid en passant target %s.", target);
-	return 0;
 }
 
-#define SCAN_VALUE_OR_ERROR(TYPE, VAL, MESG)\
+#define SCAN(TYPE, VAL)\
 do{\
-	if(!sscanf(ptr, " %n" TYPE "%n", &advance, VAL, &advance)){\
-		ptr += advance;\
-		debug_print("%s", MESG);\
-		goto ERROR;\
-	}\
+	sscanf(ptr, " %n" TYPE "%n", &advance, VAL, &advance);\
 	ptr += advance;\
-}while(0)
-#define SCAN_SPACE_OR_ERROR(MESG) \
-do{\
-	if(*ptr && sscanf(ptr, "%1[^ \t]", space)){\
-		debug_print("%s", MESG);\
-		goto ERROR;\
-	}\
 }while(0)
 int board_new(Board* board, const char* fen){
 	int advance;
@@ -216,58 +157,73 @@ int board_new(Board* board, const char* fen){
 	char space[2];
 	u16 halfmoves;
 	u16 fullmoves;
-	debug_print("%s", "Creating new board object.");
 	memset(board, NULL, sizeof(Board));
 	if(!fen)
 		head = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 	else
 		head = fen;
 	ptr = head;
+	#define SCAN(TYPE, VAL)\
+	do{\
+		sscanf(ptr, " %n" TYPE "%n", &advance, VAL, &advance);\
+		ptr += advance;\
+	}while(0)
 	//PIECES
-	SCAN_VALUE_OR_ERROR("%71s", pieces, "Cannot not read piece field:");
-	SCAN_SPACE_OR_ERROR("Extra piece data:");
-	if(!board_fen_pieces(board, pieces))
-		goto PARSE;
+	SCAN("%71s", pieces);
+	board_fen_pieces(board, pieces);
 	//ACTIVE
-	SCAN_VALUE_OR_ERROR("%c", &active, "Cannot not read active field:");
-	SCAN_SPACE_OR_ERROR("Extra active data:");
-	if(!board_fen_active(board, active))
-		goto PARSE;
+	SCAN("%c", &active);
+	board_fen_active(board, active);
 	//CASTLE
-	SCAN_VALUE_OR_ERROR("%4s", castle, "Cannot not read castle field:");
-	SCAN_SPACE_OR_ERROR("Extra castle data:");
-	if(!board_fen_castle(board, castle))
-		goto PARSE;
+	SCAN("%4s", castle);
+	board_fen_castle(board, castle);
 	//TARGET
-	SCAN_VALUE_OR_ERROR("%2s", target, "Cannot not read target field:");
-	SCAN_SPACE_OR_ERROR("Extra target data:");
-	if(!board_fen_target(board, target))
-		goto PARSE;
+	SCAN("%2s", target);
+	board_fen_target(board, target);
 	//HALFMOVES
-	SCAN_VALUE_OR_ERROR("%hu", &halfmoves, "Cannot not read halfmoves field:");
-	SCAN_SPACE_OR_ERROR("Extra halfmoves data:");
+	SCAN("%hu", &halfmoves);
 	board->halfmoves = halfmoves;
 	//FULLMOVES
-	SCAN_VALUE_OR_ERROR("%hu", &fullmoves, "Cannot not read fullmoves field:");
-	SCAN_SPACE_OR_ERROR("Extra fullmoves data:");
+	SCAN("%hu", &fullmoves);
 	board->fullmoves = fullmoves;
-
+	#undef SCAN
 	debug_print_board(board);
 
 	return 1;
-	PARSE:
-	--ptr;
-	debug_print("%s", "In this field:");
-	ERROR:
-	debug_print("%*cv", (int)(ptr-head), ' ');
-	debug_print("%s", head);
-	ABORT:
-	return 0;
-}
-#undef SCAN_VALUE_OR_ERROR
-#undef SCAN_SPACE_OR_ERROR
-//test
-int board_copy(Board* copy, const Board* original){
-	return memcpy(copy, original, sizeof(Board));
 }
 
+//test
+int board_copy(Board* copy, const Board* original){
+	memcpy(copy, original, sizeof(Board));
+	return 1;
+}
+
+int board_rem(Board* board, u8 side, u8 piece, u64 position){
+	board->pieces[side][piece] &= ~position;
+	return 1;
+}
+
+int board_set(Board* board, u8 side, u8 piece, u64 position){
+	board->pieces[side][piece] |= position;
+	return 1;
+}
+
+int board_play(Board* board, BoardMove* move){
+	char file_lookup[] = {'A', 'a'};
+	u64  rank_lookup[] = {RANK_1, RANK_8};
+	u64 pos;
+	int i;
+	if(move->piece == KING)
+		memset(board->castle[move->side], 0, 2);
+	if(move->piece == ROOK){
+		for(i = 0; i < 2; ++i){
+			pos = rank_lookup &
+				(FILE_A * (file_lookup[i] - board->castle[side][i] + 1));
+			if(pos == move->from)
+				board->castle[move->side][i] = 0;
+		}
+	}
+	board_rem(board, move->side, move->piece, move->from);
+	board_set(board, move->side, move->promotion, move->to);
+	return 1;
+}
