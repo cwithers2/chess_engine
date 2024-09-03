@@ -173,7 +173,7 @@ void board_copy(Board* copy, const Board* original){
 	memcpy(copy, original, sizeof(Board));
 }
 
-void board_play(Board* board, BoardMove* move){
+void board_play(Board* board, const BoardMove* move){
 	u64 home_lookup[] = {RANK_2, RANK_7};
 	u64 move_lookup[] = {RANK_4, RANK_5};
 	int i;
@@ -201,3 +201,20 @@ void board_play(Board* board, BoardMove* move){
 	board->halfmoves += 1;
 	board->active = !(board->active);
 }
+
+void board_format_pos(const u64 pos, char* str){
+	#define X(FILE, BITS, CHAR)\
+	if(pos & BITS) str[0] = CHAR;
+	#include <x/file.h>
+	#undef X
+	#define X(RANK, BITS, CHAR)\
+	if(pos & BITS) str[1] = CHAR;
+	#include <x/rank.h>
+	#undef X
+}
+
+void board_format_move(const BoardMove* move, char* str){
+	board_format_pos(move->from, str);
+	board_format_pos(move->to, str+2);
+}
+

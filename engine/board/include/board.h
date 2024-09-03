@@ -54,6 +54,7 @@ struct BoardMove{
 
 void board_new(Board* board, const char* fen);
 void board_copy(Board* copy, const Board* original);
-void board_play(Board* board, BoardMove* move);
-
+void board_play(Board* board, const BoardMove* move);
+void board_format_pos(const u64 pos, char* str);
+void board_format_move(const BoardMove* move, char* str);
 #endif

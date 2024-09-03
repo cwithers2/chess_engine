@@ -13,14 +13,7 @@ do{fprintf(stderr, fmt "\n", __VA_ARGS__); }while(0)
 
 void debug_print_target(Board* board){
 	char str[3] = {0};
-	#define X(FILE, BITS, CHAR)\
-	if(board->target & BITS) str[0] = CHAR;
-	#include "x/file.h"
-	#undef X
-	#define X(RANK, BITS, CHAR)\
-	if(board->target & BITS) str[1] = CHAR;
-	#include "x/rank.h"
-	#undef X
+	board_format_pos(board->target, str);
 	debug_print("TARGET : %2s", str);
 }
 
