@@ -218,3 +218,12 @@ void board_format_move(const BoardMove* move, char* str){
 	board_format_pos(move->to, str+2);
 }
 
+u64 board_flatten(const Board* board, const u8 side){
+	u64 bboard = 0;
+	#define X(PIECE)\
+	bboard |= board->pieces[side][PIECE];
+	#include <x/piece.h>
+	#undef X
+	return bboard;
+}
+
