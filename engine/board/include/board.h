@@ -35,6 +35,7 @@ typedef uint8_t  u8;
 
 typedef struct Board Board;
 typedef struct BoardMove BoardMove;
+typedef struct BoardMoveNode BoardMoveNode;
 
 struct Board{
 	u64 pieces[SIDES][PIECES];
@@ -52,10 +53,17 @@ struct BoardMove{
 	u64 to;
 };
 
+struct BoardMoveNode{
+	BoardMoveNode* next;
+	BoardMove move;
+};
+
 void board_new(Board* board, const char* fen);
 void board_copy(Board* copy, const Board* original);
 void board_play(Board* board, const BoardMove* move);
 void board_format_pos(const u64 pos, char* str);
 void board_format_move(const BoardMove* move, char* str);
 u64  board_flatten(const Board* board, const u8 side);
+int  board_moves(const Board* board, BoardMoveNode* head);
+void board_moves_free(BoardMoveNode* head);
 #endif

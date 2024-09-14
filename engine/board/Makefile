@@ -2,11 +2,11 @@ INC_DIR   = ./include/
 SRC_DIR   = ./src/
 OBJ_DIR   = ./obj/
 
-objects   = board.o
+objects   = board.o magic.o
 OBJECTS   = $(addprefix $(OBJ_DIR), $(objects))
 LIBRARY   = libboard.a
 EXAMPLE   = example
-CFLAGS   := $(CFLAGS) -Iinclude -DNO_DEBUG
+CFLAGS   := $(CFLAGS) -Iinclude
 
 build: $(LIBRARY)
 

@@ -4,12 +4,28 @@
 //set flag NO_DEBUG to remove debug tokens from compliation.
 #ifdef NO_DEBUG
 #define debug_print(fmt, ...) ;
-#define debug_print_board(B)  ;
+#define debug_print_bitboard(B)  ;
+#define debug_print_board(B) ;
 #else
 #include <stdio.h>
 #include <stdint.h>
 #define debug_print(fmt, ...) \
 do{fprintf(stderr, fmt "\n", __VA_ARGS__); }while(0)
+
+void debug_print_bitboard(u64 bboard){
+	char buffer[64+9];
+	int row, col, index = 0;
+	u64 focus = 0x8000000000000000;
+	for(row = 0; row < 8; ++row){
+		for(col = 0; col < 8; ++col){
+			buffer[index++] = focus & bboard? 'x' : ' ';
+			focus >>= 1;
+		}
+		buffer[index++] = '\n';
+	}
+	buffer[index-1] = '\0';
+	debug_print("%s", buffer);
+}
 
 void debug_print_target(Board* board){
 	char str[3] = {0};

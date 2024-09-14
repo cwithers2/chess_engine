@@ -1,6 +1,7 @@
 /* All algorithms in this file assume well formed FEN strings that
  * were already validated by some other operation (possibly the UCI library). */ 
 #include <board.h>
+#define NO_DEBUG
 #include <debug.h>
 #include <stdio.h>
 #include <string.h>
