@@ -84,6 +84,40 @@ u8 ctz64(u64 value){
 	return result;
 }
 
+u64 rmask(u64 piece){
+	int i;
+	u64 result;
+	result = 0ULL;
+	for(i = 0; i < 8; ++i)
+		if(ranks[i] & piece){
+			result |= ranks[i]&0x7e7e7e7e7e7e7e7e;
+			break;
+		}
+	for(i = 0; i < 8; ++i)
+		if(files[i] & piece){
+			result |= files[i]&0x00FFFFFFFFFFFF00;
+			break;
+		}
+	return result & ~piece;
+}
+
+u64 bmask(u64 piece){
+	int i;
+	u64 result;
+	result = 0ULL;
+	for(i = 0; i < 15; ++i)
+		if(diagonals[i]&piece){
+			result |= diagonals[i]&0x007e7e7e7e7e7e00;
+			break;
+		}
+	for(i = 15; i < 30; ++i)
+		if(diagonals[i]&piece){
+			result |= diagonals[i]&0x007e7e7e7e7e7e00;
+			break;
+		}
+	return result & ~piece;
+}
+
 u64 blockers(u16 iteration, u64 mask){
 	u64 result = 0ULL;
 	debug_print("creating blocker %i for mask %lu", iteration, mask);
@@ -103,7 +137,7 @@ u64 rattacks(int rank, int file, u64 block){
 	u64 result = 0ULL;
 	int r, f;
 	debug_print("finding attacks for (%i,%i), %lu", rank, file, block);
-	for(r = rank+1; r <= 7; ++r){
+	for(r = rank+1; r < 8; ++r){
 		result |= ranks[r];
 		if(block & ranks[r]) break;
 	}
@@ -111,7 +145,7 @@ u64 rattacks(int rank, int file, u64 block){
 		result |= ranks[r];
 		if(block & ranks[r]) break;
 	}
-	for(f = file+1; f <= 7; ++f){
+	for(f = file+1; f < 8; ++f){
 		result |= files[f];
 		if(block & files[f]) break;
 	}
@@ -185,8 +219,7 @@ int  magic_init(){
 		rank = i/8;
 		file = i%8;
 		size = 1 << rshift[i];
-		mask = (ranks[rank]&~files[file]&0x7e7e7e7e7e7e7e7e) ^
-		       (files[file]&~ranks[rank]&0x00FFFFFFFFFFFF00);
+		mask = rmask(1ULL<<i);
 		debug_print_bitboard(ranks[rank]);
 		debug_print_bitboard(files[file]);
 		debug_print_bitboard(mask);
@@ -210,16 +243,15 @@ int  magic_init(){
 	//bishops
 	u64 bit;
 	for(i = 0; i < 64; ++i){
-		bit = 1ULL << i;
-		mask = 0ULL;
+		bit  = 1ULL << i;
+		size = 1 << bshift[i];
+		mask = bmask(1ULL<<i);
 		for(j = 0; j < 15; ++j)
 			if(diagonals[j] & bit)
 				diag1 = j;
-		for(j = 8; j < 30; ++j)
+		for(j = 15; j < 30; ++j)
 			if(diagonals[j] & bit)
 				diag2 = j;
-		size  = 1 << bshift[i];
-		mask  = (diagonals[diag1] ^ diagonals[diag2])&0x007e7e7e7e7e7e00;
 		debug_print_bitboard(diagonals[diag1]);
 		debug_print_bitboard(diagonals[diag2]);
 		debug_print_bitboard(mask);
@@ -262,17 +294,19 @@ void magic_destroy(){
 	}
 }
 
-u64  magic_lookup(u64 piece, u64 block, int type){
-	u64 hashed;
+u64  magic_lookup(u64 piece, u64 bboard, int type){
+	u64 hashed, block;
 	int index;
 	index = ctz64(piece);
 	if(index == 64)
 		return -1;
 	if(type == BISHOP){
+		block  = rmask(piece) & bboard;
 		hashed = transform(block, bmagic[index], bshift[index]);
 		return btable[index][hashed];
 	}
 	if(type == ROOK){
+		block  = rmask(piece) & bboard;
 		hashed = transform(block, rmagic[index], rshift[index]);
 		return rtable[index][hashed];
 	}

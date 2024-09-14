@@ -10,8 +10,8 @@ void magic_destroy();
 	----------
 	u64 piece:
 		A single bit set on a bitboard. ie the piece we are looking up.
-	u64 block:
-		A bitboard of blockers for the piece.
+	u64 bboard:
+		A bitboard of other pieces.
 	int type:
 		The type of the piece we are looking up (ROOK or BISHOP).
 
@@ -20,5 +20,5 @@ void magic_destroy();
 	u64 attacks:
 		A bitboard of pseudo legal attacks for piece based on block.
 */
-u64  magic_lookup(u64 piece, u64 block, int type);
+u64  magic_lookup(u64 piece, u64 bboard, int type);
 #endif
