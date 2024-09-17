@@ -236,7 +236,7 @@ int  magic_init(){
 		}
 		debug_print("%s", "populating rook magics.");
 		rmagic[i] = find_magic(rshift[i], blocks, attacks, rtable[i]);
-		if(!rmagic)
+		if(!rmagic[i])
 			goto ABORT;
 	}
 	debug_print("%s", "initializing bishop magic.");
@@ -269,7 +269,7 @@ int  magic_init(){
 		}
 		debug_print("%s", "populating bishop magics.");
 		bmagic[i] = find_magic(bshift[i], blocks, attacks, btable[i]);
-		if(!bmagic)
+		if(!bmagic[i])
 			goto ABORT;
 	}
 	//cleanup

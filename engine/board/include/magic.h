@@ -19,6 +19,8 @@ void magic_destroy();
 	-------
 	u64 attacks:
 		A bitboard of pseudo legal attacks for piece based on block.
+	u64 error:
+		An error occurred. Return value -1.
 */
 u64  magic_lookup(u64 piece, u64 bboard, int type);
 #endif
