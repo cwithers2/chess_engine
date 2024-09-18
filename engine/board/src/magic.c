@@ -301,9 +301,9 @@ u64  magic_lookup(u64 piece, u64 bboard, int type){
 	int index;
 	index = ctz64(piece);
 	if(index == 64)
-		return -1;
+		return MAGIC_LOOKUP_PIECE_ERROR;
 	if(type == BISHOP){
-		block  = rmask(piece) & bboard;
+		block  = bmask(piece) & bboard;
 		hashed = transform(block, bmagic[index], bshift[index]);
 		return btable[index][hashed];
 	}
@@ -312,5 +312,5 @@ u64  magic_lookup(u64 piece, u64 bboard, int type){
 		hashed = transform(block, rmagic[index], rshift[index]);
 		return rtable[index][hashed];
 	}
-	return -1;
+	return MAGIC_LOOKUP_TYPE_ERROR;
 }

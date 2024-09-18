@@ -5,6 +5,8 @@
 int  magic_init();
 void magic_destroy();
 
+#define MAGIC_LOOKUP_PIECE_ERROR -1
+#define MAGIC_LOOKUP_TYPE_ERROR  -2
 /*
 	Parameters
 	----------
@@ -19,8 +21,10 @@ void magic_destroy();
 	-------
 	u64 attacks:
 		A bitboard of pseudo legal attacks for piece based on block.
-	u64 error:
-		An error occurred. Return value -1.
+	u64 MAGIC_LOOKUP_PIECE_ERROR:
+		The value for piece was null.
+	u64 MAGIC_LOOKUP_TYPE_ERROR:
+		The type given was not supported..
 */
 u64  magic_lookup(u64 piece, u64 bboard, int type);
 #endif
