@@ -153,8 +153,9 @@ u64 rattacks(int rank, int file, u64 block){
 		result |= files[f];
 		if(block & files[f]) break;
 	}
-	debug_print_bitboard(result & block);
-	return result & block;
+	result &= ranks[rank] | files[file];
+	debug_print_bitboard(result);
+	return result;
 }
 
 u64 battacks(int diag1, int diag2, u64 block){
@@ -177,8 +178,9 @@ u64 battacks(int diag1, int diag2, u64 block){
 		result |= diagonals[d2];
 		if(block & diagonals[d2]) break;
 	}
-	debug_print_bitboard(result & block);
-	return result & block;
+	result &= diagonals[d1] | diagonals[d2];
+	debug_print_bitboard(result);
+	return result;
 }
 
 u64 find_magic(int shift, u64* blocks, u64* attacks, u64* table){

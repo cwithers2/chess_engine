@@ -6,8 +6,8 @@
 int main(int argc, char **argv){
 	if(!magic_init())
 		return 1;
-	u64 piece  = 0x0000000000400000;
-	u64 block  = 0x00404040403e4000;
+	u64 piece  = 0x0000000000200000;
+	u64 block  = 0x2020000000FF0000;
 	u64 attack = magic_lookup(piece, block, ROOK);
 	debug_print_bitboard(block);
 	debug_print_bitboard(attack);
