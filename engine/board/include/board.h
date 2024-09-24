@@ -1,6 +1,8 @@
 #ifndef BOARD_H
 #define BOARD_H
 
+#define BOARD_EMPTYSET 0ULL
+
 enum FILES{
 	#define X(F, BITS, CHAR) FILE_##F = BITS,
 	#include "x/file.h"

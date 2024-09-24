@@ -87,7 +87,7 @@ u8 ctz64(u64 value){
 u64 rmask(u64 piece){
 	int i;
 	u64 result;
-	result = 0ULL;
+	result = BOARD_EMPTYSET;
 	for(i = 0; i < 8; ++i)
 		if(ranks[i] & piece){
 			result |= ranks[i]&0x7e7e7e7e7e7e7e7e;
@@ -104,7 +104,7 @@ u64 rmask(u64 piece){
 u64 bmask(u64 piece){
 	int i;
 	u64 result;
-	result = 0ULL;
+	result = BOARD_EMPTYSET;
 	for(i = 0; i < 15; ++i)
 		if(diagonals[i]&piece){
 			result |= diagonals[i]&0x007e7e7e7e7e7e00;
@@ -119,7 +119,7 @@ u64 bmask(u64 piece){
 }
 
 u64 blockers(u16 iteration, u64 mask){
-	u64 result = 0ULL;
+	u64 result = BOARD_EMPTYSET;
 	debug_print("creating blocker %i for mask %lu", iteration, mask);
 	while(iteration){
 		if(iteration & 1){
@@ -134,7 +134,7 @@ u64 blockers(u16 iteration, u64 mask){
 }
 
 u64 rattacks(int rank, int file, u64 block){
-	u64 result = 0ULL;
+	u64 result = BOARD_EMPTYSET;
 	int r, f;
 	debug_print("finding attacks for (%i,%i), %lu", rank, file, block);
 	for(r = rank+1; r < 8; ++r){
@@ -159,7 +159,7 @@ u64 rattacks(int rank, int file, u64 block){
 }
 
 u64 battacks(int diag1, int diag2, u64 block){
-	u64 result = 0ULL;
+	u64 result = BOARD_EMPTYSET;
 	int d1, d2;
 	debug_print("finding attacks for (%i,%i), %lu", diag1, diag2, block);
 	for(d1 = diag1+1; d1 < 15; ++d1){
@@ -189,11 +189,11 @@ u64 find_magic(int shift, u64* blocks, u64* attacks, u64* table){
 	range = 1 << shift;
 	for(j = 0; j < 100000000; ++j){
 		magic = lprand64();
-		memset(table, 0ULL, sizeof(u64) * range);
+		memset(table, 0, sizeof(u64) * range);
 		fail = 0;
 		for(i = 0; i < range; ++i){
 			hashed = transform(blocks[i], magic, shift);
-			if(table[hashed] == 0ULL)
+			if(table[hashed] == BOARD_EMPTYSET)
 				table[hashed] = attacks[i];
 			else if(table[hashed] != attacks[i]){
 				fail = 1;
@@ -220,7 +220,7 @@ int  magic_init(){
 	for(i = 0; i < 64; ++i){
 		rank = i/8;
 		file = i%8;
-		size = 1 << rshift[i];
+		size = 1ULL << rshift[i];
 		mask = rmask(1ULL<<i);
 		debug_print_bitboard(ranks[rank]);
 		debug_print_bitboard(files[file]);
@@ -247,7 +247,7 @@ int  magic_init(){
 	for(i = 0; i < 64; ++i){
 		bit  = 1ULL << i;
 		size = 1 << bshift[i];
-		mask = bmask(1ULL<<i);
+		mask = bmask(bit);
 		for(j = 0; j < 15; ++j)
 			if(diagonals[j] & bit)
 				diag1 = j;

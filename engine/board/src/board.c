@@ -104,7 +104,7 @@ void board_fen_castle(Board* board, const char* castle){
 void board_fen_target(Board* board, const char* target){
 	u64 rank, file;
 	if(target[0] == FEN_DASH){
-		board->target = 0ULL;
+		board->target = BOARD_EMPTYSET;
 		return;
 	}
 	switch(target[0]){
