@@ -179,12 +179,12 @@ void board_play(Board* board, const BoardMove* move){
 	u64 move_lookup[] = {RANK_4, RANK_5};
 	int i;
 	if(move->piece == KING)
-		board->castle[board->active] = 0ULL;
+		board->castle[board->active] = BOARD_EMPTYSET;
 	if(move->piece == ROOK)
 		for(i = 0; i < 2; ++i)
 			if(board->castle[board->active] & move->from)
 				board->castle[board->active] &= ~(move->from);
-	board->target = 0ULL;
+	board->target = BOARD_EMPTYSET;
 	if(move->piece == PAWN)
 		if( (move->from & home_lookup[board->active]) &&
 		    (move->to   & move_lookup[board->active]) )
@@ -220,7 +220,7 @@ void board_format_move(const BoardMove* move, char* str){
 }
 
 u64 board_flatten(const Board* board, const u8 side){
-	u64 bboard = 0ULL;
+	u64 bboard = BOARD_EMPTYSET;
 	#define X(PIECE)\
 	bboard |= board->pieces[side][PIECE];
 	#include <x/piece.h>
