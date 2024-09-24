@@ -60,6 +60,9 @@ struct BoardMoveNode{
 	BoardMove move;
 };
 
+int  board_init();
+void board_destroy();
+
 void board_new(Board* board, const char* fen);
 void board_copy(Board* copy, const Board* original);
 void board_play(Board* board, const BoardMove* move);

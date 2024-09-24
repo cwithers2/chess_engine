@@ -5,8 +5,6 @@
 int  magic_init();
 void magic_destroy();
 
-#define MAGIC_LOOKUP_PIECE_ERROR -1
-#define MAGIC_LOOKUP_TYPE_ERROR  -2
 /*
 	Parameters
 	----------
@@ -15,16 +13,12 @@ void magic_destroy();
 	u64 bboard:
 		A bitboard of other pieces.
 	int type:
-		The type of the piece we are looking up (ROOK or BISHOP).
+		The type of the piece to lookup (ROOK or BISHOP).
 
 	Returns
 	-------
 	u64 attacks:
-		A bitboard of pseudo legal attacks for piece based on block.
-	u64 MAGIC_LOOKUP_PIECE_ERROR:
-		The value for piece was null.
-	u64 MAGIC_LOOKUP_TYPE_ERROR:
-		The type given was not supported..
+		A bitboard of pseudo legal attacks for piece based on bboard.
 */
 u64  magic_lookup(u64 piece, u64 bboard, int type);
 #endif
