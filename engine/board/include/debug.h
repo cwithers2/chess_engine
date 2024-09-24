@@ -3,13 +3,11 @@
 
 //set flag DEBUG to include debug tokens.
 #ifndef DEBUG
-#define LOCAL_DECL ;
 #define debug_print(fmt, ...) ;
 #define debug_print_bitboard(B)  ;
 #define debug_print_board(B) ;
 
 #else
-#define LOCAL_DECL static
 #include <stdio.h>
 #include <stdint.h>
 #define debug_print(fmt, ...) \
