@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "include/board.h"
-#include "include/debug.h"
 #include "include/magic.h"
+#include "include/debug.h"
 
 int main(int argc, char **argv){
 	if(!magic_init())

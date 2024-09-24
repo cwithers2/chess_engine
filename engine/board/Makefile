@@ -6,12 +6,16 @@ objects   = board.o magic.o
 OBJECTS   = $(addprefix $(OBJ_DIR), $(objects))
 LIBRARY   = libboard.a
 EXAMPLE   = example
-CFLAGS   := $(CFLAGS) -Iinclude
+CFLAGS   += -Iinclude
 
 build: $(LIBRARY)
 
+debug:
+OBJECTS += $(OBJ_DIR)debug.o
+CFLAGS  += -DDEBUG
+
 example: $(LIBRARY) example.c
-	$(CC) example.c -o $(EXAMPLE) -L. -lboard
+	$(CC) example.c -o $(EXAMPLE) -L. -lboard -DDEBUG
 
 $(LIBRARY): $(OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^
