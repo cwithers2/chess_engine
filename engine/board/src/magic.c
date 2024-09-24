@@ -259,9 +259,7 @@ int  magic_init(){
 		debug_print_bitboard(mask);
 		//allocate
 		btable[i] = malloc(sizeof(u64) * size);
-		blocks    = malloc(sizeof(u64) * size);
-		attacks   = malloc(sizeof(u64) * size);
-		if(!(btable[i] && blocks && attacks))
+		if(!btable[i])
 			goto ABORT;
 		//populate
 		debug_print("%s", "populating blockers and attackers.");
