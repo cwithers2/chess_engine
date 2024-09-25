@@ -1,9 +1,9 @@
 #ifndef MAGIC_H
 #define MAGIC_H
-#include "board.h"
+#include "util.h"
 
-int  magic_init();
-void magic_destroy();
+int  board_magic_init();
+void board_magic_destroy();
 
 /*
 	Parameters
@@ -20,5 +20,5 @@ void magic_destroy();
 	u64 attacks:
 		A bitboard of pseudo legal attacks for piece based on bboard.
 */
-u64  magic_lookup(u64 piece, u64 bboard, int type);
+u64  board_magic_lookup(u64 piece, u64 bboard, int type);
 #endif

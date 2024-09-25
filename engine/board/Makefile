@@ -2,7 +2,7 @@ INC_DIR   = ./include/
 SRC_DIR   = ./src/
 OBJ_DIR   = ./obj/
 
-objects   = board.o magic.o
+objects   = board.o magic.o util.o
 OBJECTS  ?= $(addprefix $(OBJ_DIR), $(objects))
 LIBRARY   = libboard.a
 EXAMPLE   = example

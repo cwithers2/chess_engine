@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <magic.h>
-#include <board.h>
 #include <debug.h>
 
 u64 ranks[] = {
@@ -54,39 +53,10 @@ static u16 transform(u64 bboard, u64 magic, u8 bits){
 	return (u16)((bboard * magic) >> (64 - bits));
 }
 
-static u64 rand64(){
-	u64 result;
-	result |= random() & 0xFFFF; result <<= 16;
-	result |= random() & 0xFFFF; result <<= 16;
-	result |= random() & 0xFFFF; result <<= 16;
-	result |= random() & 0xFFFF;
-	return result;
-}
-
-static u64 lprand64(){
-	return rand64() & rand64() & rand64() & rand64();
-}
-
-static u8 ctz64(u64 value){
-	u8 result;
-	if(!value)
-		return 64;
-	value &= -value;
-	result = 0;
-	#define MASKED_ADD(MASK, ADD) if(value & MASK) result |= ADD
-	MASKED_ADD(0xAAAAAAAAAAAAAAAA, 1);
-	MASKED_ADD(0xCCCCCCCCCCCCCCCC, 2);
-	MASKED_ADD(0xF0F0F0F0F0F0F0F0, 4);
-	MASKED_ADD(0xFF00FF00FF00FF00, 8);
-	MASKED_ADD(0xFFFF0000FFFF0000, 16);
-	MASKED_ADD(0xFFFFFFFF00000000, 32);
-	return result;
-}
-
 static u64 rmask(u64 piece){
 	int i;
 	u64 result;
-	result = BOARD_EMPTYSET;
+	result = EMPTYSET;
 	for(i = 0; i < 8; ++i)
 		if(ranks[i] & piece){
 			result |= ranks[i]&0x7e7e7e7e7e7e7e7e;
@@ -103,7 +73,7 @@ static u64 rmask(u64 piece){
 static u64 bmask(u64 piece){
 	int i;
 	u64 result;
-	result = BOARD_EMPTYSET;
+	result = EMPTYSET;
 	for(i = 0; i < 15; ++i)
 		if(diagonals[i]&piece){
 			result |= diagonals[i]&0x007e7e7e7e7e7e00;
@@ -118,11 +88,11 @@ static u64 bmask(u64 piece){
 }
 
 static u64 blockers(u16 iteration, u64 mask){
-	u64 result = BOARD_EMPTYSET;
+	u64 result = EMPTYSET;
 	debug_print("creating blocker %i for mask %lu", iteration, mask);
 	while(iteration){
 		if(iteration & 1){
-			u8 shift = ctz64(mask);
+			int shift = board_ctz64(mask);
 			result |= 1ULL << shift;
 		}
 		iteration >>= 1;
@@ -133,7 +103,7 @@ static u64 blockers(u16 iteration, u64 mask){
 }
 
 static u64 rattacks(int rank, int file, u64 block){
-	u64 result = BOARD_EMPTYSET;
+	u64 result = EMPTYSET;
 	int r, f;
 	debug_print("finding attacks for (%i,%i), %lu", rank, file, block);
 	for(r = rank+1; r < 8; ++r){
@@ -158,7 +128,7 @@ static u64 rattacks(int rank, int file, u64 block){
 }
 
 static u64 battacks(int diag1, int diag2, u64 block){
-	u64 result = BOARD_EMPTYSET;
+	u64 result = EMPTYSET;
 	int d1, d2;
 	debug_print("finding attacks for (%i,%i), %lu", diag1, diag2, block);
 	for(d1 = diag1+1; d1 < 15; ++d1){
@@ -187,12 +157,12 @@ static u64 find_magic(int shift, u64* blocks, u64* attacks, u64* table){
 	int i, j, range, fail;
 	range = 1 << shift;
 	for(j = 0; j < 100000000; ++j){
-		magic = lprand64();
+		magic = board_lprand64();
 		memset(table, 0, sizeof(u64) * range);
 		fail = 0;
 		for(i = 0; i < range; ++i){
 			hashed = transform(blocks[i], magic, shift);
-			if(table[hashed] == BOARD_EMPTYSET)
+			if(table[hashed] == EMPTYSET)
 				table[hashed] = attacks[i];
 			else if(table[hashed] != attacks[i]){
 				fail = 1;
@@ -206,7 +176,7 @@ static u64 find_magic(int shift, u64* blocks, u64* attacks, u64* table){
 }
 
 //public functions
-int  magic_init(){
+int  board_magic_init(){
 	u64 mask;
 	int i, j;
 	int rank, file, diag1, diag2;
@@ -285,7 +255,7 @@ int  magic_init(){
 	return 0;
 }
 
-void magic_destroy(){
+void board_magic_destroy(){
 	int i;
 	for(i = 0; i < 64; ++i){
 		free(rtable[i]);
@@ -293,10 +263,10 @@ void magic_destroy(){
 	}
 }
 
-u64  magic_lookup(u64 piece, u64 bboard, int type){
+u64  board_magic_lookup(u64 piece, u64 bboard, int type){
 	u64 hashed, block, result;
 	int index;
-	index = ctz64(piece);
+	index = board_ctz64(piece);
 	switch(type){
 	case BISHOP:
 		block  = bmask(piece) & bboard;

@@ -174,7 +174,7 @@ static void fen_castle(Board* board, const char* castle){
 static void fen_target(Board* board, const char* target){
 	u64 rank, file;
 	if(target[0] == FEN_DASH){
-		board->target = BOARD_EMPTYSET;
+		board->target = EMPTYSET;
 		return;
 	}
 	switch(target[0]){
@@ -194,22 +194,6 @@ static void fen_target(Board* board, const char* target){
 	#undef X
 	}
 	board->target = file & rank;
-}
-
-static u8 ctz64(u64 value){
-	u8 result;
-	if(!value)
-		return 64;
-	value &= -value;
-	result = 0;
-	#define MASKED_ADD(MASK, ADD) if(value & MASK) result |= ADD
-	MASKED_ADD(0xAAAAAAAAAAAAAAAA, 1);
-	MASKED_ADD(0xCCCCCCCCCCCCCCCC, 2);
-	MASKED_ADD(0xF0F0F0F0F0F0F0F0, 4);
-	MASKED_ADD(0xFF00FF00FF00FF00, 8);
-	MASKED_ADD(0xFFFF0000FFFF0000, 16);
-	MASKED_ADD(0xFFFFFFFF00000000, 32);
-	return result;
 }
 
 static u64 pawn_advance(u64 piece, int side){
@@ -250,13 +234,49 @@ static u64 pawn_lookup(u64 piece, u64 bboard, int side){
 	return result;
 }
 
+static u64 flatten(const Board* board, const u8 side){
+	u64 bboard = EMPTYSET;
+	#define X(PIECE)\
+	bboard |= board->pieces[side][PIECE];
+	#include <x/piece.h>
+	#undef X
+	return bboard;
+}
+
+static u64 lookup(const u64 piece, const u64 bboard,
+                  const int type, const int side){
+	u64 result;
+	switch(type){
+	case BISHOP:
+	case ROOK:
+		result = board_magic_lookup(piece, bboard, type);
+		break;
+	case QUEEN:
+		result = board_magic_lookup(piece, bboard, BISHOP) |
+		         board_magic_lookup(piece, bboard, ROOK);
+		break;
+	case KING:
+		result = ktable[board_ctz64(piece)];
+		break;
+	case KNIGHT:
+		result = ntable[board_ctz64(piece)];
+		break;
+	case PAWN:
+		result = pawn_lookup(piece, bboard, side);
+		break;
+	default:
+		break;
+	}
+	return result;
+}
+
 //global functions
 int  board_init(){
-	return magic_init();
+	return board_magic_init();
 }
 
 void board_destroy(){
-	magic_destroy();
+	board_magic_destroy();
 }
 
 void board_new(Board* board, const char* fen){
@@ -312,12 +332,12 @@ void board_play(Board* board, const BoardMove* move){
 	u64 move_lookup[] = {RANK_4, RANK_5};
 	int i;
 	if(move->piece == KING)
-		board->castle[board->active] = BOARD_EMPTYSET;
+		board->castle[board->active] = EMPTYSET;
 	if(move->piece == ROOK)
 		for(i = 0; i < 2; ++i)
 			if(board->castle[board->active] & move->from)
 				board->castle[board->active] &= ~(move->from);
-	board->target = BOARD_EMPTYSET;
+	board->target = EMPTYSET;
 	if(move->piece == PAWN)
 		if( (move->from & home_lookup[board->active]) &&
 		    (move->to   & move_lookup[board->active]) )
@@ -334,59 +354,6 @@ void board_play(Board* board, const BoardMove* move){
 		board->fullmoves += 1;
 	board->halfmoves += 1;
 	board->active = !(board->active);
-}
-
-void board_format_pos(const u64 pos, char* str){
-	#define X(FILE, BITS, CHAR)\
-	if(pos & BITS) str[0] = CHAR;
-	#include <x/file.h>
-	#undef X
-	#define X(RANK, BITS, CHAR)\
-	if(pos & BITS) str[1] = CHAR;
-	#include <x/rank.h>
-	#undef X
-}
-
-void board_format_move(const BoardMove* move, char* str){
-	board_format_pos(move->from, str);
-	board_format_pos(move->to, str+2);
-}
-
-u64 board_flatten(const Board* board, const u8 side){
-	u64 bboard = BOARD_EMPTYSET;
-	#define X(PIECE)\
-	bboard |= board->pieces[side][PIECE];
-	#include <x/piece.h>
-	#undef X
-	return bboard;
-}
-
-u64 board_lookup(Board* board, u64 piece, int type, int side){
-	u64 attacks, friends, bboard;
-	friends = board_flatten(board, side);
-	bboard  = friends | board_flatten(board, !side);
-	switch(type){
-	case BISHOP:
-	case ROOK:
-		attacks = magic_lookup(piece, bboard, type);
-		break;
-	case QUEEN:
-		attacks = magic_lookup(piece, bboard, BISHOP) |
-		          magic_lookup(piece, bboard, ROOK);
-		break;
-	case KING:
-		attacks = ktable[ctz64(piece)];
-		break;
-	case KNIGHT:
-		attacks = ntable[ctz64(piece)];
-		break;
-	case PAWN:
-		attacks = pawn_lookup(piece, bboard, side);
-		break;
-	default:
-		break;
-	}
-	return attacks & ~friends;
 }
 
 int board_moves(const Board* board, BoardMoveNode* head){
