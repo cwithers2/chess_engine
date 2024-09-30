@@ -49,8 +49,8 @@ u64 bmagic[64];
 u64* rtable[64];
 u64* btable[64];
 
-static u16 transform(u64 bboard, u64 magic, u8 bits){
-	return (u16)((bboard * magic) >> (64 - bits));
+static int transform(u64 bboard, u64 magic, int bits){
+	return (int)((bboard * magic) >> (64 - bits));
 }
 
 static u64 rmask(u64 piece){
@@ -244,7 +244,7 @@ int  board_magic_init(){
 	//cleanup
 	free(blocks);
 	free(attacks);
-	return 1;
+	return BOARD_SUCCESS;
 	ABORT:
 	for(i = 0; i < 64; ++i){
 		free(rtable[i]);
@@ -252,7 +252,7 @@ int  board_magic_init(){
 	}
 	free(blocks);
 	free(attacks);
-	return 0;
+	return BOARD_ERROR;
 }
 
 void board_magic_destroy(){
@@ -264,8 +264,8 @@ void board_magic_destroy(){
 }
 
 u64  board_magic_lookup(u64 piece, u64 bboard, int type){
-	u64 hashed, block, result;
-	int index;
+	u64 block, result;
+	int index, hashed;
 	index = board_ctz64(piece);
 	switch(type){
 	case BISHOP:
@@ -277,6 +277,14 @@ u64  board_magic_lookup(u64 piece, u64 bboard, int type){
 		block  = rmask(piece) & bboard;
 		hashed = transform(block, rmagic[index], rshift[index]);
 		result = rtable[index][hashed];
+		break;
+	default:
+		block  = bmask(piece) & bboard;
+		hashed = transform(block, bmagic[index], bshift[index]);
+		result = btable[index][hashed];
+		block  = rmask(piece) & bboard;
+		hashed = transform(block, rmagic[index], rshift[index]);
+		result = result | rtable[index][hashed];
 		break;
 	}
 	return result;

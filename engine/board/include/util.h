@@ -27,6 +27,13 @@ enum PIECE_INDEX{
 	PIECES
 };
 
+enum STATUS{
+	BOARD_ERROR     = 0,
+	BOARD_SUCCESS   = 1,
+	BOARD_CHECKMATE = 2,
+	BOARD_STALEMATE = 3
+};
+
 typedef uint64_t u64;
 typedef uint32_t u32;
 typedef uint16_t u16;
@@ -41,7 +48,9 @@ typedef struct BoardMoveNode BoardMoveNode;
 u64 board_rand64();
 u64 board_lprand64();
 int board_ctz64(u64 value);
+int board_pop64(u64 value);
 
+u64  board_get_pos(const char* str);
 void board_format_pos(const u64 pos, char* str);
 void board_format_move(const BoardMove* move, char* str);
 

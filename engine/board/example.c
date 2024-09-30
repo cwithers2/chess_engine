@@ -1,20 +1,36 @@
 #include <stdio.h>
 #include "include/board.h"
-#include "include/magic.h"
 #include "include/debug.h"
 
 int main(int argc, char **argv){
-	if(!magic_init())
-		return 1;
-	u64 piece  = 0x0000000000200000;
-	u64 block  = 0x2020000000FF0000;
-	u64 attack = magic_lookup(piece, block, ROOK);
-	debug_print_bitboard(block);
-	debug_print_bitboard(attack);
-	char fen[] = "1n6/2BrPPPp/1R1bp1k1/2QppNr1/1pn1b3/1p1PPppP/2P1BRP1/1qNK4 w kq - 0 1";
+	char fen[120];
+	char loc[3];
+	char move[6];
 	Board board;
-	BoardMove move;
+	BoardMove data;
+	BoardMove *head = &data, *iter;
+	printf("Initializing board library. Please wait.\n");
+	if(!board_init()){
+		printf("Failed to initialize board library.\n");
+		return 1;
+	}
+	printf("Enter FEN> ");
+	fgets(fen, 120, stdin);
 	board_new(&board, fen);
-	debug_print_board(&board);
+	printf("Enter an active piece's location> ");
+	fgets(loc, 3, stdin);
+	printf("Generating board moves.\n");
+	if(!board_moves(&board, &head)){
+		printf("failed to generate board moves.\n");
+		return 2;
+	}
+	printf("Moves: ");
+	iter = data.next;
+	while(iter){
+		board_format_move(iter, move);
+		printf("%s ", move);
+		iter = iter->next;
+	}
+	printf("\n");
 	return 0;
 }

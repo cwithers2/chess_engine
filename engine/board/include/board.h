@@ -12,23 +12,19 @@ struct Board{
 };
 
 struct BoardMove{
-	u8 piece;
+	BoardMove* next;
+	u8 piece_type;
 	u8 promotion;
 	u64 from;
 	u64 to;
 };
 
-struct BoardMoveNode{
-	BoardMoveNode* next;
-	BoardMove move;
-};
-
 int  board_init();
 void board_destroy();
 
-void board_new(Board* board, const char* fen);
-void board_copy(Board* copy, const Board* original);
-void board_play(Board* board, const BoardMove* move);
-int  board_moves(const Board* board, BoardMoveNode* head);
-void board_moves_free(BoardMoveNode* head);
+void board_new(Board* board, char* fen);
+void board_copy(Board* copy, Board* original);
+void board_play(Board* board, BoardMove* move);
+int  board_moves(Board* board, BoardMove** tail);
+void board_moves_free(BoardMove* head);
 #endif
