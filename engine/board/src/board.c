@@ -258,36 +258,6 @@ void board_play(Board* board, BoardMove* move){
 	#undef castles
 }
 
-#if 0
-void board_play(Board* board, BoardMove* move){
-	//castle tracking
-	if(move->piece_type == KING)
-		board->castle[board->active] = EMPTYSET;
-	if(move->piece_type == ROOK)
-		board->castle[board->active] &= ~(move->from);
-	//en passant tracking
-	board->target = EMPTYSET;
-	if(move->piece_type == PAWN)
-		if( (move->from & PAWN_HOME[board->active]) &&
-		    (move->to   & PAWN_JUMP[board->active]) )
-			board->target = move->to;
-	//capturing opponent's castle
-	if(move->to & board->castle[!(board->active)])
-		board->castle[!(board->active)] &= ~(move->to);
-	//adjust our pieces
-	board->pieces[board->active][move->piece_type] &= ~(move->from);
-	board->pieces[board->active][move->promotion]  |=   move->to;
-	//record any captures of enemy pieces
-	for(int i = 0; i < PIECES; ++i)
-		board->pieces[!(board->active)][i] &= ~(move->to);
-	//update counters and switch sides
-	if(board->active == BLACK)
-		board->fullmoves += 1;
-	board->halfmoves += 1;
-	board->active = !(board->active);
-}
-#endif
-
 int board_moves(Board* board, BoardMove* head){
 	u64 checker, bboard, pmoves, sq, allies;
 	int checker_type, side, status;
