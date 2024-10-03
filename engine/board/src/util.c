@@ -2,6 +2,18 @@
 #include <util.h>
 #include <board.h>
 
+const u64 BIT_RANKS[8] = {
+#define X(RANK, BITS, CHAR) BITS,
+#include <x/rank.h>
+#undef X
+};
+
+const u64 BIT_FILES[8] = {
+#define X(FILE, BITS, CHAR) BITS,
+#include <x/file.h>
+#undef X
+};
+
 u64 board_rand64(){
 	u64 result;
 	result |= random() & 0xFFFF; result <<= 16;
@@ -33,15 +45,32 @@ int board_pop64(u64 value){
 
 u64 board_get_pos(const char* str){
 	u64 result;
+	result = EMPTYSET;
+	switch(str[0]){
 	#define X(FILE, BITS, CHAR)\
-	if(str[0] == CHAR) result  = BITS;
+	case CHAR:\
+		result |= BITS;\
+		break;
 	#include <x/file.h>
 	#undef X
+	}
+	switch(str[1]){
 	#define X(RANK, BITS, CHAR)\
-	if(str[1] == CHAR) result &= BITS;
+	case CHAR:\
+		result |= BITS;\
+		break;
 	#include <x/rank.h>
 	#undef X
+	}
 	return result;
+}
+
+u64  board_get_rank(const u64 piece){
+	return BIT_RANKS[board_ctz64(piece) / 8];
+}
+
+u64  board_get_file(const u64 piece){
+	return BIT_FILES[board_ctz64(piece) % 8];
 }
 
 void board_format_pos(const u64 pos, char* str){
@@ -59,6 +88,8 @@ void board_format_pos(const u64 pos, char* str){
 void board_format_move(const BoardMove* move, char* str){
 	board_format_pos(move->from, str);
 	board_format_pos(move->to, str+2);
+	if(move->piece_type == move->promotion)
+		return;
 	if(move->piece_type != PAWN)
 		return;
 	switch(move->promotion){
@@ -69,4 +100,5 @@ void board_format_move(const BoardMove* move, char* str){
 	#include <x/black.h>
 	#undef X
 	}
+	str[5] = '\0';
 }

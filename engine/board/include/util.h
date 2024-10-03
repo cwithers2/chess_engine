@@ -50,6 +50,8 @@ u64 board_lprand64();
 int board_ctz64(u64 value);
 int board_pop64(u64 value);
 
+u64  board_get_rank(const u64 piece);
+u64  board_get_file(const u64 piece);
 u64  board_get_pos(const char* str);
 void board_format_pos(const u64 pos, char* str);
 void board_format_move(const BoardMove* move, char* str);

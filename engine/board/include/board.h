@@ -2,6 +2,11 @@
 #define BOARD_H
 #include <util.h>
 
+enum BOARD_MODE{
+	BOARD_MODE_STD,
+	BOARD_MODE_960
+};
+
 struct Board{
 	u64 pieces[SIDES][PIECES];
 	u64 castle[SIDES];
@@ -19,12 +24,12 @@ struct BoardMove{
 	u64 to;
 };
 
-int  board_init();
+int  board_init(int mode);
 void board_destroy();
 
 void board_new(Board* board, char* fen);
 void board_copy(Board* copy, Board* original);
 void board_play(Board* board, BoardMove* move);
-int  board_moves(Board* board, BoardMove** tail);
+int  board_moves(Board* board, BoardMove* head);
 void board_moves_free(BoardMove* head);
 #endif

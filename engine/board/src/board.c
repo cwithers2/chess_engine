@@ -7,6 +7,16 @@
 #include <magic.h>
 #include <debug.h>
 
+//SECTION CONSTANTS & MACROS
+#define FOR_BIT_IN_SET(BIT, SET) \
+for(u64 X=SET, BIT=X&-X; X; X&=(X-1), BIT=X&-X)
+#define DOUBLE_CHECK 11
+#define NO_CHECK     12
+
+#define QUEENSIDE       0
+#define KINGSIDE        1
+#define CASTLESIDE(K,C) (K > C)
+
 #define FEN_SKIP_1 '1'
 #define FEN_SKIP_2 '2'
 #define FEN_SKIP_3 '3'
@@ -34,7 +44,7 @@ const u64 PAWN_HOME[] = {RANK_2, RANK_7};
 const u64 PAWN_PROM[] = {RANK_8, RANK_1};
 const u64 PAWN_JUMP[] = {RANK_4, RANK_5};
 
-u64 ktable[64] = {
+const u64 ktable[64] = {
 	0x0000000000000302ULL, 0x0000000000000705ULL,
 	0x0000000000000E0AULL, 0x0000000000001C14ULL,
 	0x0000000000003828ULL, 0x0000000000007050ULL,
@@ -69,7 +79,7 @@ u64 ktable[64] = {
 	0xA0E0000000000000ULL, 0x40C0000000000000ULL
 };
 
-u64 ntable[64] = {
+const u64 ntable[64] = {
 	0x0000000000020400ULL, 0x0000000000050800ULL,
 	0x00000000000A1100ULL, 0x0000000000142200ULL,
 	0x0000000000284400ULL, 0x0000000000508800ULL,
@@ -104,6 +114,247 @@ u64 ntable[64] = {
 	0x0010A00000000000ULL, 0x0020400000000000ULL
 };
 
+int board_mode;
+
+//SECTION: forward declarations
+//SUBSECTION: fen parsing
+static void fen_pieces(Board*, const char*);
+static void fen_active(Board*, const char);
+static void fen_castle(Board*, const char*);
+static void fen_target(Board*, const char*);
+//SUBSECTION: move lookup
+static u64 pawn_lookup(u64, u64, int);
+static u64 lookup(u64, u64, int, int);
+//SUBSECTION: utility
+static u64 flatten(u64*);
+static void get_checkers(u64, u64, u64*, int, u64*, int*);
+static int is_castle_move(u64, u64, u64);
+static void get_rook_sides(u64, u64, u64*);
+static void get_castling_squares(int, int, u64*, u64*);
+//SUBSECTION: node functions
+static int push(BoardMove**, u64, u64, int, int);
+static int push_move(BoardMove**, u64, u64, int, int);
+static int push_moves(BoardMove**, u64, u64, int, int);
+//SUBSECTION: move generation
+static int gen_king_moves(u64, u64, u64*, u64, int, BoardMove**);
+static int gen_castle_move(u64, u64, u64*, u64, int, int, BoardMove**);
+static int gen_castle_moves(u64, u64, u64*, u64, int, BoardMove**);
+static int gen_block_moves(u64, u64, u64, int, u64, int, u64, int, BoardMove**);
+static int gen_nopin_moves(u64, u64, u64*, u64, int, u64, int, u64, int, BoardMove**);
+static int gen_piece_moves(u64, u64, u64*, u64, int, u64, int, u64, int, BoardMove**);
+
+//SECTION: function definitions
+//SUBSECTION: public
+int  board_init(int mode){
+	board_mode = mode;
+	return board_magic_init();
+}
+
+void board_destroy(){
+	board_magic_destroy();
+}
+
+void board_new(Board* board, char* fen){
+	int advance;
+	const char* ptr;
+	const char* head;
+	char pieces[72];
+	char active;
+	char castle[5];
+	char target[3];
+	char space[2];
+	u16 halfmoves;
+	u16 fullmoves;
+	memset(board, 0, sizeof(Board));
+	if(!fen)
+		head = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+	else
+		head = fen;
+	ptr = head;
+	#define SCAN(TYPE, VAL)\
+	do{\
+		sscanf(ptr, " %n" TYPE "%n", &advance, VAL, &advance);\
+		ptr += advance;\
+	}while(0)
+	//PIECES
+	SCAN("%71s", pieces);
+	fen_pieces(board, pieces);
+	//ACTIVE
+	SCAN("%c", &active);
+	fen_active(board, active);
+	//CASTLE
+	SCAN("%4s", castle);
+	fen_castle(board, castle);
+	//TARGET
+	SCAN("%2s", target);
+	fen_target(board, target);
+	//HALFMOVES
+	SCAN("%hu", &halfmoves);
+	board->halfmoves = halfmoves;
+	//FULLMOVES
+	SCAN("%hu", &fullmoves);
+	board->fullmoves = fullmoves;
+	#undef SCAN
+	debug_print_board(board);
+}
+
+void board_copy(Board* copy, Board* original){
+	memcpy(copy, original, sizeof(Board));
+}
+
+void board_play(Board* board, BoardMove* move){
+	u64 king_sq, rook_sq, *rooks, rook;
+	int castleside;
+	#define side    (board->active)
+	#define castles (board->castle[side])
+	switch(move->piece_type){
+	case PAWN:
+		//check for enpassant
+		if( (move->from & PAWN_HOME[side]) &&
+		    (move->to   & PAWN_JUMP[side]) )
+			board->target = move->to;
+		break;
+	case KNIGHT:
+	case BISHOP:
+		break;
+	case ROOK:
+		//revoke applicable castling
+		castles &= ~(move->from);
+		break;
+	case QUEEN:
+		break;
+	case KING:
+		//check for castling move
+		if(!castles)
+			break;
+		//check if we are castling
+		if(is_castle_move(move->from, move->to, castles)){
+			castleside = CASTLESIDE(move->to, move->from);
+			get_castling_squares(side, castleside, &king_sq, &rook_sq);
+			get_rook_sides(move->from, castles, rooks);
+			board->pieces[side][KING] &= ~(move->from);
+			board->pieces[side][ROOK] &= ~(rooks[castleside]);
+			board->pieces[side][KING] |=   king_sq;
+			board->pieces[side][ROOK] |=   rook_sq;
+			board->castle[board->active] = EMPTYSET;
+			return;
+		}
+		board->castle[board->active] = EMPTYSET;
+		break;
+	default:
+		break;
+	}
+	//adust pieces
+	board->pieces[side][move->piece_type] &= ~(move->from);
+	board->pieces[side][move->promotion]  |=   move->to;
+	for(int i = 0; i < PIECES; ++i)
+		board->pieces[!side][i] &= ~(move->to);
+	//update counters and switch sides
+	if(board->active == BLACK)
+		board->fullmoves += 1;
+	board->halfmoves += 1;
+	board->active = !(side);
+	#undef side
+	#undef castles
+}
+
+#if 0
+void board_play(Board* board, BoardMove* move){
+	//castle tracking
+	if(move->piece_type == KING)
+		board->castle[board->active] = EMPTYSET;
+	if(move->piece_type == ROOK)
+		board->castle[board->active] &= ~(move->from);
+	//en passant tracking
+	board->target = EMPTYSET;
+	if(move->piece_type == PAWN)
+		if( (move->from & PAWN_HOME[board->active]) &&
+		    (move->to   & PAWN_JUMP[board->active]) )
+			board->target = move->to;
+	//capturing opponent's castle
+	if(move->to & board->castle[!(board->active)])
+		board->castle[!(board->active)] &= ~(move->to);
+	//adjust our pieces
+	board->pieces[board->active][move->piece_type] &= ~(move->from);
+	board->pieces[board->active][move->promotion]  |=   move->to;
+	//record any captures of enemy pieces
+	for(int i = 0; i < PIECES; ++i)
+		board->pieces[!(board->active)][i] &= ~(move->to);
+	//update counters and switch sides
+	if(board->active == BLACK)
+		board->fullmoves += 1;
+	board->halfmoves += 1;
+	board->active = !(board->active);
+}
+#endif
+
+int board_moves(Board* board, BoardMove* head){
+	u64 checker, bboard, pmoves, sq, allies;
+	int checker_type, side, status;
+	BoardMove* tail;
+	#define side    board->active
+	#define enemies board->pieces[!(side)]
+	#define king    board->pieces[side][KING]
+	#define castles board->castle[side]
+	debug_print("%s", "King position:");
+	debug_print_bitboard(king);
+	debug_print("ctz(king): %i", board_ctz64(king));
+	tail = head;
+	allies = flatten(board->pieces[side]);
+	bboard = allies | flatten(enemies);
+	get_checkers(bboard, king, enemies, side, &checker, &checker_type);
+	if(checker_type == NO_CHECK){
+		status = gen_castle_moves(bboard, king, enemies, castles, side, &tail);
+		if(status == BOARD_ERROR)
+			goto ERROR;
+	}
+	pmoves = lookup(king, bboard, KING, side) & ~allies;
+	debug_print("%s", "Pseudo king moves:");
+	debug_print_bitboard(pmoves);
+	status = gen_king_moves(bboard, king, enemies, pmoves, side, &tail);
+	if(status == BOARD_ERROR)
+		goto ERROR;
+	if(checker_type != DOUBLE_CHECK)
+		for(int i = 0; i < KING; ++i){
+			FOR_BIT_IN_SET(sq, board->pieces[side][i]){
+				debug_print("Piece type %i at postion:", i);
+				debug_print_bitboard(sq);
+				pmoves = lookup(sq, bboard, i, side) & ~allies;
+				debug_print("Pseudo %i moves:", i);
+				debug_print_bitboard(pmoves);
+				status = gen_piece_moves(
+					bboard, king, enemies, pmoves, side,
+					sq, i, checker, checker_type, &tail);
+				if(status == BOARD_ERROR)
+					goto ERROR;
+			}
+		}
+	tail->next = NULL;
+	if(head == tail)
+		if(checker_type == NO_CHECK){
+			return BOARD_STALEMATE;
+		}else{
+			return BOARD_CHECKMATE;
+		}
+	return BOARD_SUCCESS;
+	ERROR:
+	board_moves_free(head->next);
+	return BOARD_ERROR;
+	#undef king
+	#undef side
+	#undef enemies
+	#undef castles
+}
+
+void board_moves_free(BoardMove* head){
+	BoardMove* temp;
+	while(head){
+		temp = head;
+		head = head->next;
+		free(temp);
+	}
+}
+//SUBSECTION: fen parsing
 static void fen_pieces(Board* board, const char* pieces){
 	unsigned char rank;
 	unsigned char file;
@@ -181,66 +432,24 @@ static void fen_target(Board* board, const char* target){
 		board->target = EMPTYSET;
 		return;
 	}
-	switch(target[0]){
-	#define X(FILE, BITS, CHAR)\
-	case CHAR:\
-		file = BITS;\
-		break;
-	#include <x/file.h>
-	#undef X
-	}
-	switch(target[1]){
-	#define X(RANK, BITS, CHAR)\
-	case CHAR:\
-		rank = BITS;\
-		break;
-	#include <x/rank.h>
-	#undef X
-	}
-	board->target = file & rank;
+	board->target = board_get_pos(target);
 }
-
-static u64 pawn_advance(u64 piece, int side){
+//SUBSECTION: move lookup
+static u64 pawn_lookup(u64 piece, u64 bboard, int side){
+	u64 attacks, rank, single_move, double_move;
 	switch(side){
 	case WHITE:
-		return piece << 8;
+		single_move = (piece << 8) & ~bboard;
+		double_move = (single_move << 8) & PAWN_JUMP[side];
+		break;
 	case BLACK:
-		return piece >> 8;
-	};
-}
-
-static u64 pawn_lookup(u64 piece, u64 bboard, int side){
-	u64 result, attack;
-	result = 0ULL;
-	//ignore promotion squares
-	if(piece & PAWN_PROM[side])
-		return result;
-	//single and double advance
-	if(!(pawn_advance(piece, side) & bboard)){
-		result |= pawn_advance(piece, side);
-		if((piece & PAWN_HOME[side]) && !(pawn_advance(result, side) & bboard))
-			result |= pawn_advance(result, side);
+		single_move = (piece >> 8) & ~bboard;
+		double_move = (single_move >> 8) & PAWN_JUMP[side];
+		break;
 	}
-	//diagonal left
-	if(!(piece & FILE_A)){
-		attack = pawn_advance(piece << 1, side);
-		if(attack & bboard)
-			result |= attack;
-	}
-	//diagonal right
-	if(!(piece & FILE_H)){
-		attack = pawn_advance(piece >> 1, side);
-		if(attack & bboard)
-			result |= attack;
-	}
-	return result;
-}
-
-static u64 flatten(u64* pieces){
-	u64 result = EMPTYSET;
-	for(int i = 0; i < PIECES; ++i)
-		result |= pieces[i];
-	return result;
+	rank    = board_get_rank(single_move);
+	attacks = ((single_move << 1 | single_move >> 1) & (rank & bboard));
+	return single_move | double_move | attacks;
 }
 
 static u64 lookup(u64 piece, u64 bboard, int type, int side){
@@ -266,109 +475,96 @@ static u64 lookup(u64 piece, u64 bboard, int type, int side){
 	return result;
 }
 
-//global functions
-int  board_init(){
-	return board_magic_init();
-}
-
-void board_destroy(){
-	board_magic_destroy();
-}
-
-void board_new(Board* board, char* fen){
-	int advance;
-	const char* ptr;
-	const char* head;
-	char pieces[72];
-	char active;
-	char castle[5];
-	char target[3];
-	char space[2];
-	u16 halfmoves;
-	u16 fullmoves;
-	memset(board, 0, sizeof(Board));
-	if(!fen)
-		head = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-	else
-		head = fen;
-	ptr = head;
-	#define SCAN(TYPE, VAL)\
-	do{\
-		sscanf(ptr, " %n" TYPE "%n", &advance, VAL, &advance);\
-		ptr += advance;\
-	}while(0)
-	//PIECES
-	SCAN("%71s", pieces);
-	fen_pieces(board, pieces);
-	//ACTIVE
-	SCAN("%c", &active);
-	fen_active(board, active);
-	//CASTLE
-	SCAN("%4s", castle);
-	fen_castle(board, castle);
-	//TARGET
-	SCAN("%2s", target);
-	fen_target(board, target);
-	//HALFMOVES
-	SCAN("%hu", &halfmoves);
-	board->halfmoves = halfmoves;
-	//FULLMOVES
-	SCAN("%hu", &fullmoves);
-	board->fullmoves = fullmoves;
-	#undef SCAN
-	debug_print_board(board);
-}
-
-void board_copy(Board* copy, Board* original){
-	memcpy(copy, original, sizeof(Board));
-}
-
-void board_play(Board* board, BoardMove* move){
-	//castle tracking
-	if(move->piece_type == KING)
-		board->castle[board->active] = EMPTYSET;
-	if(move->piece_type == ROOK)
-		board->castle[board->active] &= ~(move->from);
-	//en passant tracking
-	board->target = EMPTYSET;
-	if(move->piece_type == PAWN)
-		if( (move->from & PAWN_HOME[board->active]) &&
-		    (move->to   & PAWN_JUMP[board->active]) )
-			board->target = move->to;
-	//capturing opponent's castle
-	if(move->to & board->castle[!(board->active)])
-		board->castle[!(board->active)] &= ~(move->to);
-	//adjust our pieces
-	board->pieces[board->active][move->piece_type] &= ~(move->from);
-	board->pieces[board->active][move->promotion]  |=   move->to;
-	//record any captures of enemy pieces
+//SUBSECTION: utility
+static u64 flatten(u64* pieces){
+	u64 result = EMPTYSET;
 	for(int i = 0; i < PIECES; ++i)
-		board->pieces[!(board->active)][i] &= ~(move->to);
-	//update counters and switch sides
-	if(board->active == BLACK)
-		board->fullmoves += 1;
-	board->halfmoves += 1;
-	board->active = !(board->active);
+		result |= pieces[i];
+	return result;
 }
 
-#define FOR_BIT_IN_SET(BIT, SET) \
-for(u64 X=SET, BIT=X&-X; X; X&=(X-1), BIT=X&-X)
-#define DOUBLE_CHECK 11
-#define NO_CHECK     12
+static void get_castling_squares(
+	int side, int castleside,
+	u64* king_sq, u64* rook_sq
+){
+	u64 home;
+	home = PAWN_PROM[!side];
+	switch(castleside){
+	case QUEENSIDE:
+		*king_sq = home & FILE_C;
+		*rook_sq = home & FILE_D;
+		break;
+	default:
+		*king_sq = home & FILE_G;
+		*rook_sq = home & FILE_F;
+		break;
+	}
+}
 
+static void get_rook_sides(u64 king, u64 castles, u64* rooks){
+	//rooks: rooks[0] == QUEENSIDE, rooks[1] == KINGSIDE
+	switch(board_pop64(castles)){
+	case 0:
+		rooks[KINGSIDE]  = EMPTYSET;
+		rooks[QUEENSIDE] = EMPTYSET;
+		break;
+	case 1:
+		rooks[ CASTLESIDE(king, castles)] = castles;
+		rooks[!CASTLESIDE(king, castles)] = EMPTYSET;
+		break;
+	default:
+		rooks[KINGSIDE]  = castles & -castles;
+		rooks[QUEENSIDE] = castles & ~rooks[KINGSIDE];
+		break;
+	}
+}
+
+static void get_checkers(
+	u64 bboard, u64 king, u64* enemies, int side,
+	u64* checker, int* checker_type
+){
+	u64 threat, threats;
+	threats = EMPTYSET;
+	*checker_type = NO_CHECK;
+	for(int i = 0; i < PIECES; ++i){
+		threat = lookup(king, bboard, i, side) & enemies[i];
+		if(threat){
+			*checker = threat;
+			*checker_type = i;
+		}
+		threats |= threat;
+	}
+	if(board_pop64(threats) > 1)
+		*checker_type = DOUBLE_CHECK;
+}
+
+static int is_castle_move(u64 from, u64 to, u64 castles){
+	u64 moves;
+	switch(board_mode){
+	case BOARD_MODE_960:
+		return to & castles;
+	default:
+		moves = ktable[board_ctz64(from)];
+		return moves & ~to;
+	}
+}
+
+//SUBSECTION: node functions
 static int push(
 	BoardMove** tail, u64 from, u64 to, int piece_type, int promotion
 ){
-	(*tail)->next = malloc(sizeof(BoardMove));
-	if(!((*tail)->next))
+	BoardMove *next;
+	next = malloc(sizeof(BoardMove));
+	if(!next)
 		return BOARD_ERROR;
-	*((*tail)->next) = (BoardMove){
+	*next = (BoardMove){
 		.piece_type = piece_type,
 		.promotion  = promotion,
 		.from = from,
 		.to   = to
 	};
-	tail = &((*tail)->next);
+	(*tail)->next = next;
+	*tail = next;
 	return BOARD_SUCCESS;
 }
 
@@ -378,10 +574,11 @@ static int push_move(
 	int count;
 	count = 0;
 	if(piece_type == PAWN && (to & PAWN_PROM[side])){
+		debug_print("%s", "Promotion detected.");
 		count += push(tail, from, to, PAWN, QUEEN);
+		count += push(tail, from, to, PAWN, ROOK);
 		count += push(tail, from, to, PAWN, BISHOP);
 		count += push(tail, from, to, PAWN, KNIGHT);
-		count += push(tail, from, to, PAWN, ROOK);
 		return (count == 4) ? BOARD_SUCCESS : BOARD_ERROR;
 	}
 	return push(tail, from, to, piece_type, piece_type);
@@ -394,44 +591,86 @@ static int push_moves(
 	int count;
 	count = 0;
 	FOR_BIT_IN_SET(sq, moves)
-		count += push(tail, from, sq, piece_type, side);
+		count += push_move(tail, from, sq, piece_type, side);
 	return (count == board_pop64(moves)) ? BOARD_SUCCESS : BOARD_ERROR;
 }
-
+//SUBSECTION: move generation
 static int gen_king_moves(
 	u64 bboard, u64 king, u64* enemies, u64 pmoves, int side,
 	BoardMove** tail
 ){
-	//todo impliment castling
-	int status;
+	int skip;
 	u64 sq, check;
 	FOR_BIT_IN_SET(sq, pmoves){
+		skip = 0;
 		for(int i = 0; i < PIECES; ++i){
-			check = lookup(sq, bboard, i, side) & enemies[i];
-			if(!check){
-				status = push(tail, king, sq, KING, KING);
-				if(!status)
-					return BOARD_ERROR;
+			if(lookup(sq, bboard, i, side) & enemies[i]){
+				skip = 1;
+				break;
 			}
 		}
+		if(skip)
+			continue;
+		if(!push(tail, king, sq, KING, KING))
+			return BOARD_ERROR;
 	}
 	return BOARD_SUCCESS;
 }
 
-static void get_checkers(
-	u64 bboard, u64 king, u64* enemies, int side,
-	u64* checker, int* checker_type
+static int gen_castle_move(
+	u64 bboard, u64 king, u64* enemies, u64 rook, int side, int castleside,
+	BoardMove** tail
 ){
-	u64 threat;
-	*checker_type = NO_CHECK;
-	for(int i = 0; i < PIECES; ++i){
-		threat = lookup(king, bboard, i, side) & enemies[i];
-		if(threat)
-			*checker_type = i;
-		*checker |= threat;
+	u64 to, king_sq, rook_sq, sq, slide, attack;
+	get_castling_squares(side, castleside, &king_sq, &rook_sq);
+	switch(board_mode){
+	case BOARD_MODE_960:
+		to = rook;
+		break;
+	default:
+	case BOARD_MODE_STD:
+		to = king_sq;
+		break;
 	}
-	if(board_pop64(*checker) > 1)
-		*checker_type = DOUBLE_CHECK;
+	//check rook clearance
+	if(!(lookup(rook, bboard & ~king, ROOK, side) & rook_sq))
+		return BOARD_SUCCESS;
+	//check king clearance
+	slide = ( lookup(king,    bboard,  ROOK, side) &
+	          lookup(king_sq, bboard,  ROOK, side) ) | king_sq;
+	FOR_BIT_IN_SET(sq, slide){
+		for(int i = 0; i < PIECES; ++i){
+			attack = lookup(sq, bboard, i, side) & enemies[i];
+			if(attack)
+				return BOARD_SUCCESS;
+		}
+	}
+	return push_move(tail, king, to, KING, side);
+}
+
+static int gen_castle_moves(
+	u64 bboard, u64 king, u64* enemies, u64 castles, int side,
+	BoardMove** tail
+){
+	u64 rooks[2];
+	int result;
+	switch(board_pop64(castles)){
+	case 0:
+		return BOARD_SUCCESS;
+		break;
+	case 1:
+		return gen_castle_move(
+			bboard, king, enemies, castles, side, CASTLESIDE(king, castles),
+			tail);
+	default:
+		get_rook_sides(king, castles, rooks);
+		result  = 0;
+		result += gen_castle_move(
+			bboard, king, enemies, rooks[QUEENSIDE], side, QUEENSIDE, tail);
+		result += gen_castle_move(
+			bboard, king, enemies, rooks[KINGSIDE],  side, KINGSIDE,  tail);
+		return result == 2 ? BOARD_SUCCESS : BOARD_ERROR;
+	}
 }
 
 static int gen_block_moves(
@@ -507,51 +746,5 @@ static int gen_piece_moves(
 		//this is not normal.
 	default:
 		return BOARD_SUCCESS;
-	}
-}
-
-int board_moves(Board* board, BoardMove** tail){
-	u64 checker, bboard, pmoves, sq, allies;
-	int checker_type, side, status;
-	BoardMove* head;
-	head = *tail;
-	#define side    board->active
-	#define enemies board->pieces[!(side)]
-	#define king    board->pieces[side][KING]
-	allies = flatten(board->pieces[side]);
-	bboard = allies | flatten(enemies);
-	get_checkers(bboard, king, enemies, side, &checker, &checker_type);
-	pmoves = lookup(bboard, king, KING, side) & ~allies;
-	status = gen_king_moves(bboard, king, enemies, pmoves, side, tail);
-	if(!status)
-		goto ERROR;
-	if(checker_type != DOUBLE_CHECK)
-		for(int i = 0; i < PIECES; ++i)
-			FOR_BIT_IN_SET(sq, board->pieces[side][i]){
-				pmoves = lookup(bboard, sq, i, side) & ~allies;
-				status = gen_piece_moves(
-					bboard, king, enemies, pmoves, side,
-					sq, i, checker, checker_type, tail);
-				if(!status)
-					goto ERROR;
-			}
-	if(head == *tail)
-		if(checker_type == NO_CHECK){
-			return BOARD_STALEMATE;
-		}else{
-			return BOARD_CHECKMATE;
-		}
-	return BOARD_SUCCESS;
-	ERROR:
-	board_moves_free(head->next);
-	return BOARD_ERROR;
-}
-
-void board_moves_free(BoardMove* head){
-	BoardMove* temp;
-	while(head){
-		temp = head;
-		head = head->next;
-		free(temp);
 	}
 }
