@@ -2,10 +2,17 @@
 #define MAGIC_H
 #include "util.h"
 
+/*
+	Returns
+	-------
+	int result:
+		1 for success, 0 for failure.
+*/
 int  board_magic_init();
 void board_magic_destroy();
 
 /*
+	Lookup the squares a sliding piece can move to.
 	Parameters
 	----------
 	u64 piece:
@@ -14,7 +21,7 @@ void board_magic_destroy();
 			-Must be non-zero with popcount == 1.
 			-Garbage in, garbage out.
 	u64 bboard:
-		A bitboard of other pieces.
+		A bitboard of all pieces.
 	int type:
 		The type of the piece to lookup, either BISHOP or ROOK. Any other
 		value will be evaluated as QUEEN.

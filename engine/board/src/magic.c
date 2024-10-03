@@ -244,7 +244,7 @@ int  board_magic_init(){
 	//cleanup
 	free(blocks);
 	free(attacks);
-	return BOARD_SUCCESS;
+	return 1;
 	ABORT:
 	for(i = 0; i < 64; ++i){
 		free(rtable[i]);
@@ -252,7 +252,7 @@ int  board_magic_init(){
 	}
 	free(blocks);
 	free(attacks);
-	return BOARD_ERROR;
+	return 0;
 }
 
 void board_magic_destroy(){

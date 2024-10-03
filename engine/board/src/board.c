@@ -147,7 +147,7 @@ static int gen_piece_moves(u64, u64, u64*, u64, int, u64, int, u64, int, BoardMo
 //SUBSECTION: public
 int  board_init(int mode){
 	board_mode = mode;
-	return board_magic_init();
+	return board_magic_init() ? BOARD_SUCCESS : BOARD_ERROR;
 }
 
 void board_destroy(){
@@ -309,6 +309,7 @@ int board_moves(Board* board, BoardMove* head){
 	return BOARD_SUCCESS;
 	ERROR:
 	board_moves_free(head->next);
+	head->next = NULL;
 	return BOARD_ERROR;
 	#undef king
 	#undef side
@@ -316,11 +317,11 @@ int board_moves(Board* board, BoardMove* head){
 	#undef castles
 }
 
-void board_moves_free(BoardMove* head){
+void board_moves_free(BoardMove* moves){
 	BoardMove* temp;
-	while(head){
-		temp = head;
-		head = head->next;
+	while(moves){
+		temp  = moves;
+		moves = moves->next;
 		free(temp);
 	}
 }

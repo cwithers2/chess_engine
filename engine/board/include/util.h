@@ -27,13 +27,6 @@ enum PIECE_INDEX{
 	PIECES
 };
 
-enum STATUS{
-	BOARD_ERROR     = 0,
-	BOARD_SUCCESS   = 1,
-	BOARD_CHECKMATE = 2,
-	BOARD_STALEMATE = 3
-};
-
 typedef uint64_t u64;
 typedef uint32_t u32;
 typedef uint16_t u16;
