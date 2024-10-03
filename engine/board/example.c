@@ -1,34 +1,69 @@
 #include <stdio.h>
+#include <string.h>
 #include "include/board.h"
+#include "include/debug.h"
 
-int main(int argc, char **argv){
+void setup_new_board(Board*);
+void list_moves(BoardMove*);
+void play_move(Board*, BoardMove*);
+
+void setup_new_board(Board* board){
 	char fen[120];
-	char move[6];
-	int status;
-	Board board;
-	BoardMove head, *iter;
-	printf("Initializing board library. Please wait.\n");
-	if(board_init(BOARD_MODE_STD) == BOARD_ERROR){
-		printf("Failed to initialize board library.\n");
-		return 1;
-	}
 	printf("Enter FEN> ");
 	fgets(fen, 120, stdin);
-	board_new(&board, fen);
-	printf("Generating board moves.\n");
-	status = board_moves(&board, &head);
-	printf("board_moves(...) returned %i\n", status);
-	if(status == BOARD_ERROR){
-		return 2;
-	}
+	if(fen[0] == '\n')
+		board_new(board, NULL);
+	else
+		board_new(board, fen);
+}
+
+void list_moves(BoardMove* moves){
+	char move[6];
+	BoardMove *iter;
 	printf("Moves: ");
-	iter = head.next;
+	iter = moves;
 	while(iter){
 		board_format_move(iter, move);
 		printf("%s ", move);
 		iter = iter->next;
 	}
 	printf("\n");
-	board_moves_free(head.next);
-	return 0;
+}
+
+void play_move(Board* board, BoardMove* moves){
+	char move[6];
+	BoardMove* lookup;
+	RETRY:
+	printf("Enter move to play> ");
+	fgets(move, 6, stdin);
+	move[strcspn(move, "\n")] = 0;
+	lookup = board_find_move(moves, move);
+	if(!lookup){
+		printf("Move not found.\n");
+		goto RETRY;
+	}
+	board_play(board, lookup);
+}
+
+int main(int argc, char **argv){
+	int status;
+	Board board;
+	BoardMove head;
+	printf("Initializing board library. Please wait.\n");
+	if(board_init(BOARD_MODE_STD) == BOARD_ERROR){
+		fprintf(stderr, "Failed to initialize board library.\n");
+		return 1;
+	}
+	setup_new_board(&board);
+	while(1){
+		debug_print_board(&board);
+		status = board_moves(&board, &head);
+		if(status == BOARD_ERROR){
+			fprintf(stderr, "board moves returned non-zero: %i", status);
+			return status;
+		}
+		list_moves(head.next);
+		play_move(&board, head.next);
+		board_moves_free(head.next);
+	}
 }

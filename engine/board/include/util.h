@@ -56,4 +56,5 @@ u64  board_get_pos(const char* str);
 void board_format_pos(const u64 pos, char* str);
 void board_format_move(const BoardMove* move, char* str);
 
+BoardMove* board_find_move(const BoardMove* moves, const char* str);
 #endif

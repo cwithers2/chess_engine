@@ -23,7 +23,8 @@ void debug_print_bitboard(u64 bboard){
 
 static void print_target(Board* board){
 	char str[3] = {0};
-	board_format_pos(board->target, str);
+	if(board->target)
+		board_format_pos(board->target, str);
 	debug_print("TARGET : %2s", str);
 }
 
