@@ -131,6 +131,7 @@ static void get_checkers(u64, u64, u64*, int, u64*, int*);
 static int is_castle_move(u64, u64, u64);
 static void get_rook_sides(u64, u64, u64*);
 static void get_castling_squares(int, int, u64*, u64*);
+static u64 advance_one(u64, int);
 //SUBSECTION: node functions
 static int push(BoardMove**, u64, u64, int, int);
 static int push_move(BoardMove**, u64, u64, int, int);
@@ -203,16 +204,19 @@ void board_copy(Board* copy, Board* original){
 }
 
 void board_play(Board* board, BoardMove* move){
-	u64 king_sq, rook_sq, *rooks, rook;
+	u64 king_sq, rook_sq, *rooks, rook, target;
 	int castleside;
 	#define side    (board->active)
 	#define castles (board->castle[side])
+	target = EMPTYSET;
 	switch(move->piece_type){
 	case PAWN:
-		//check for enpassant
+		//check for target squares
 		if( (move->from & PAWN_HOME[side]) &&
 		    (move->to   & PAWN_JUMP[side]) )
-			board->target = move->to;
+			target = advance_one(move->from, side);
+		if(move->to & board->target)
+			board->pieces[!side][PAWN] &= ~(advance_one(move->to, !side));
 		break;
 	case KNIGHT:
 	case BISHOP:
@@ -249,6 +253,7 @@ void board_play(Board* board, BoardMove* move){
 	board->pieces[side][move->promotion]  |=   move->to;
 	for(int i = 0; i < PIECES; ++i)
 		board->pieces[!side][i] &= ~(move->to);
+	board->target = target;
 	//update counters and switch sides
 	if(board->active == BLACK)
 		board->fullmoves += 1;
@@ -259,7 +264,7 @@ void board_play(Board* board, BoardMove* move){
 }
 
 int board_moves(Board* board, BoardMove* head){
-	u64 checker, bboard, pmoves, sq, allies;
+	u64 checker, bboard, pmoves, sq, allies, pawn_bboard;
 	int checker_type, side, status;
 	BoardMove* tail;
 	#define side    board->active
@@ -272,6 +277,7 @@ int board_moves(Board* board, BoardMove* head){
 	tail = head;
 	allies = flatten(board->pieces[side]);
 	bboard = allies | flatten(enemies);
+	pawn_bboard = bboard | board->target;
 	get_checkers(bboard, king, enemies, side, &checker, &checker_type);
 	if(checker_type == NO_CHECK){
 		status = gen_castle_moves(bboard, king, enemies, castles, side, &tail);
@@ -287,16 +293,19 @@ int board_moves(Board* board, BoardMove* head){
 	if(checker_type != DOUBLE_CHECK)
 		for(int i = 0; i < KING; ++i){
 			FOR_BIT_IN_SET(sq, board->pieces[side][i]){
-				debug_print("Piece type %i at postion:", i);
-				debug_print_bitboard(sq);
-				pmoves = lookup(sq, bboard, i, side) & ~allies;
-				debug_print("Pseudo %i moves:", i);
-				debug_print_bitboard(pmoves);
-				status = gen_piece_moves(
-					bboard, king, enemies, pmoves, side,
-					sq, i, checker, checker_type, &tail);
-				if(status == BOARD_ERROR)
-					goto ERROR;
+				switch(i){
+				case PAWN:
+					pmoves = lookup(sq, pawn_bboard, i, side) & ~allies;
+					break;
+				default:
+					pmoves = lookup(sq, bboard, i, side) & ~allies;
+					break;
+				}
+			status = gen_piece_moves(
+				bboard, king, enemies, pmoves, side,
+				sq, i, checker, checker_type, &tail);
+			if(status == BOARD_ERROR)
+				goto ERROR;
 			}
 		}
 	tail->next = NULL;
@@ -407,19 +416,22 @@ static void fen_target(Board* board, const char* target){
 }
 //SUBSECTION: move lookup
 static u64 pawn_lookup(u64 piece, u64 bboard, int side){
-	u64 attacks, rank, single_move, double_move;
+	u64 attacks, rank, single_move, double_move, advance;
 	switch(side){
 	case WHITE:
-		single_move = (piece << 8) & ~bboard;
-		double_move = (single_move << 8) & PAWN_JUMP[side];
+		advance     =   piece << 8;
+		single_move =  advance & ~bboard;
+		double_move =  (single_move << 8) & PAWN_JUMP[side];
+		attacks     = ((piece << 9)|(piece << 7)) & board_get_rank(advance);
 		break;
 	case BLACK:
-		single_move = (piece >> 8) & ~bboard;
-		double_move = (single_move >> 8) & PAWN_JUMP[side];
+		advance     =   piece >> 8;
+		single_move =  advance & ~bboard;
+		double_move =  (single_move >> 8) & PAWN_JUMP[side];
+		attacks     = ((piece >> 9)|(piece >> 7)) & board_get_rank(advance);
 		break;
 	}
-	rank    = board_get_rank(single_move);
-	attacks = ((single_move << 1 | single_move >> 1) & (rank & bboard));
+	attacks &= bboard;
 	return single_move | double_move | attacks;
 }
 
@@ -519,6 +531,16 @@ static int is_castle_move(u64 from, u64 to, u64 castles){
 		return moves & ~to;
 	}
 }
+
+static u64 advance_one(u64 bboard, int side){
+	switch(side){
+	case BLACK:
+		return bboard >> 8;
+	default:
+		return bboard << 8;
+	}
+}
+
 
 //SUBSECTION: node functions
 static int push(

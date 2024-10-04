@@ -31,11 +31,11 @@ void list_moves(BoardMove* moves){
 }
 
 void play_move(Board* board, BoardMove* moves){
-	char move[6];
+	char move[10];
 	BoardMove* lookup;
 	RETRY:
 	printf("Enter move to play> ");
-	fgets(move, 6, stdin);
+	fgets(move, 10, stdin);
 	move[strcspn(move, "\n")] = 0;
 	lookup = board_find_move(moves, move);
 	if(!lookup){
