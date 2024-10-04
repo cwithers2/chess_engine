@@ -416,18 +416,19 @@ static void fen_target(Board* board, const char* target){
 }
 //SUBSECTION: move lookup
 static u64 pawn_lookup(u64 piece, u64 bboard, int side){
-	u64 attacks, rank, single_move, double_move, advance;
+	u64 attacks, rank, single_move, double_move, advance, empty_squares;
+	empty_squares = ~bboard;
 	switch(side){
 	case WHITE:
-		advance     =   piece << 8;
-		single_move =  advance & ~bboard;
-		double_move =  (single_move << 8) & PAWN_JUMP[side];
+		advance     =  piece << 8;
+		single_move =  advance & empty_squares;
+		double_move =  (single_move << 8) & PAWN_JUMP[side] & empty_squares;
 		attacks     = ((piece << 9)|(piece << 7)) & board_get_rank(advance);
 		break;
 	case BLACK:
-		advance     =   piece >> 8;
-		single_move =  advance & ~bboard;
-		double_move =  (single_move >> 8) & PAWN_JUMP[side];
+		advance     =  piece >> 8;
+		single_move =  advance & empty_squares;
+		double_move =  (single_move >> 8) & PAWN_JUMP[side] & empty_squares;
 		attacks     = ((piece >> 9)|(piece >> 7)) & board_get_rank(advance);
 		break;
 	}
