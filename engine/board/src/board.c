@@ -633,6 +633,10 @@ static int gen_castle_move(
 	 !(lookup(rook, bboard & ~king, ROOK, side) & rook_sq))
 		return BOARD_SUCCESS;
 	//check king clearance
+	if(king_sq & bboard ||
+	 !(lookup(king, bboard & ~rook, ROOK, side) & king_sq))
+	 	return BOARD_SUCCESS;
+	//check attackers
 	slide = ( lookup(king,    bboard,  ROOK, side) &
 	          lookup(king_sq, bboard,  ROOK, side) ) | king_sq;
 	FOR_BIT_IN_SET(sq, slide){
