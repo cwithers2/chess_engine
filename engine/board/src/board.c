@@ -128,7 +128,7 @@ static u64 lookup(u64, u64, int, int);
 //SUBSECTION: utility
 static u64 flatten(u64*);
 static void get_checkers(u64, u64, u64*, int, u64*, int*);
-static int is_castle_move(u64, u64, u64);
+static u64 is_castle_move(u64, u64, u64);
 static void get_rook_sides(u64, u64, u64*);
 static void get_castling_squares(int, int, u64*, u64*);
 static u64 advance_one(u64, int);
@@ -204,7 +204,7 @@ void board_copy(Board* copy, Board* original){
 }
 
 void board_play(Board* board, BoardMove* move){
-	u64 king_sq, rook_sq, *rooks, rook, target;
+	u64 king_sq, rook_sq, rooks[2], rook, target;
 	int castleside;
 	#define side    (board->active)
 	#define castles (board->castle[side])
@@ -233,28 +233,30 @@ void board_play(Board* board, BoardMove* move){
 			break;
 		//check if we are castling
 		if(is_castle_move(move->from, move->to, castles)){
-			castleside = CASTLESIDE(move->to, move->from);
+			debug_print("%s", "Castling.");
+			castleside = CASTLESIDE(move->from, move->to);
 			get_castling_squares(side, castleside, &king_sq, &rook_sq);
 			get_rook_sides(move->from, castles, rooks);
 			board->pieces[side][KING] &= ~(move->from);
 			board->pieces[side][ROOK] &= ~(rooks[castleside]);
 			board->pieces[side][KING] |=   king_sq;
 			board->pieces[side][ROOK] |=   rook_sq;
-			board->castle[board->active] = EMPTYSET;
-			return;
+			board->castle[side] = EMPTYSET;
+			goto UPDATE;
 		}
-		board->castle[board->active] = EMPTYSET;
+		board->castle[side] = EMPTYSET;
 		break;
 	default:
 		break;
 	}
-	//adust pieces
+	//adjust pieces
 	board->pieces[side][move->piece_type] &= ~(move->from);
 	board->pieces[side][move->promotion]  |=   move->to;
 	for(int i = 0; i < PIECES; ++i)
 		board->pieces[!side][i] &= ~(move->to);
-	board->target = target;
+	UPDATE:
 	//update counters and switch sides
+	board->target = target;
 	if(board->active == BLACK)
 		board->fullmoves += 1;
 	board->halfmoves += 1;
@@ -522,14 +524,14 @@ static void get_checkers(
 		*checker_type = DOUBLE_CHECK;
 }
 
-static int is_castle_move(u64 from, u64 to, u64 castles){
+static u64 is_castle_move(u64 from, u64 to, u64 castles){
 	u64 moves;
 	switch(board_mode){
 	case BOARD_MODE_960:
 		return to & castles;
 	default:
 		moves = ktable[board_ctz64(from)];
-		return moves & ~to;
+		return ~moves & to;
 	}
 }
 
@@ -627,7 +629,8 @@ static int gen_castle_move(
 		break;
 	}
 	//check rook clearance
-	if(!(lookup(rook, bboard & ~king, ROOK, side) & rook_sq))
+	if(rook_sq & bboard ||
+	 !(lookup(rook, bboard & ~king, ROOK, side) & rook_sq))
 		return BOARD_SUCCESS;
 	//check king clearance
 	slide = ( lookup(king,    bboard,  ROOK, side) &
