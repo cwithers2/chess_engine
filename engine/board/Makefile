@@ -6,6 +6,7 @@ objects   = board.o magic.o util.o
 OBJECTS  ?= $(addprefix $(OBJ_DIR), $(objects))
 LIBRARY   = libboard.a
 EXAMPLE   = example
+TEST      = test
 CFLAGS   ?= -Iinclude
 
 
@@ -26,9 +27,13 @@ $(OBJ_DIR)%.o: $(SRC_DIR)%.c
 	@mkdir -p $(OBJ_DIR)
 	$(CC) -c $(CFLAGS) $< -o $@
 
+test: $(LIBRARY) $(SRC_DIR)test.c
+	$(CC) $(SRC_DIR)test.c -o $(TEST) -L. -lboard $(CFLAGS)
+
 clean:
 	$(RM) $(OBJECTS)
 	$(RM) -R $(OBJ_DIR)
 	$(RM) $(LIBRARY)
 	$(RM) $(EXAMPLE)
+	$(RM) $(TEST)
 
