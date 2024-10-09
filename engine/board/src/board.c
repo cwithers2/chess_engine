@@ -10,8 +10,8 @@
 //SECTION CONSTANTS & MACROS
 #define FOR_BIT_IN_SET(BIT, SET) \
 for(u64 X=SET, BIT=X&-X; X; X&=(X-1), BIT=X&-X)
-#define DOUBLE_CHECK 11
-#define NO_CHECK     12
+#define DOUBLE_CHECK    11
+#define NO_CHECK        12
 
 #define QUEENSIDE       0
 #define KINGSIDE        1
@@ -513,10 +513,26 @@ static void get_checkers(
 	threats = EMPTYSET;
 	*checker_type = NO_CHECK;
 	for(int i = 0; i < PIECES; ++i){
-		threat = lookup(king, bboard, i, side) & enemies[i];
-		if(threat){
-			*checker = threat;
-			*checker_type = i;
+		switch(i){
+		case QUEEN:
+			threat = lookup(king, bboard, BISHOP, side) & enemies[i];
+			if(threat){
+				*checker = threat;
+				*checker_type = BISHOP;
+				break;
+			}
+			threat = lookup(king, bboard, ROOK, side) & enemies[i];
+			if(threat){
+				*checker = threat;
+				*checker_type = ROOK;
+			}
+			break;
+		default:
+			threat = lookup(king, bboard, i, side) & enemies[i];
+			if(threat){
+				*checker = threat;
+				*checker_type = i;
+			}
 		}
 		threats |= threat;
 	}
@@ -723,7 +739,6 @@ static int gen_piece_moves(
 	switch(checker_type){
 	case BISHOP:
 	case ROOK:
-	case QUEEN:
 		//we are checked, but we can block.
 		return gen_block_moves(
 			bboard, king, pmoves, side,
@@ -745,6 +760,8 @@ static int gen_piece_moves(
 		//only king moves can avoid this.
 	case KING:
 		//this is not normal.
+	case QUEEN:
+		//this should have already been converted to rook or bishop.
 	default:
 		return BOARD_SUCCESS;
 	}
