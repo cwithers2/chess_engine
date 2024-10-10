@@ -8,10 +8,16 @@ enum BOARD_MODE{
 };
 
 enum STATUS{
-	BOARD_ERROR     = 0,
-	BOARD_SUCCESS   = 1,
-	BOARD_CHECKMATE = 2,
-	BOARD_STALEMATE = 3
+	BOARD_ERROR        = 0,
+	BOARD_SUCCESS      = 1,
+};
+
+enum STATE{
+	BOARD_NO_CHECK     = 0x00,
+	BOARD_STALEMATE    = 0x01,
+	BOARD_CHECK        = 0x02,
+	BOARD_DOUBLE_CHECK = 0x06,
+	BOARD_CHECKMATE    = BOARD_CHECK | BOARD_STALEMATE
 };
 
 struct Board{
@@ -21,6 +27,7 @@ struct Board{
 	u64 target;
 	u16 halfmoves;
 	u16 fullmoves;
+	int state;
 };
 
 struct BoardMove{
@@ -99,7 +106,7 @@ void board_play(Board* board, BoardMove* move);
 	Returns
 	-------
 	int result:
-		Returns BOARD_ERROR, BOARD_SUCCESS, BOARD_STALEMATE, BOARD_CHECKMATE.
+		Returns BOARD_ERROR or BOARD_SUCCESS.
 */
 int  board_moves(Board* board, BoardMove* head);
 

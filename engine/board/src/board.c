@@ -127,7 +127,7 @@ static u64 pawn_lookup(u64, u64, int);
 static u64 lookup(u64, u64, int, int);
 //SUBSECTION: utility
 static u64 flatten(u64*);
-static void get_checkers(u64, u64, u64*, int, u64*, int*);
+static int get_checkers(u64, u64, u64*, int, u64*, int*);
 static u64 is_castle_move(u64, u64, u64);
 static void get_rook_sides(u64, u64, u64*);
 static void get_castling_squares(int, int, u64*, u64*);
@@ -273,6 +273,7 @@ int board_moves(Board* board, BoardMove* head){
 	#define enemies board->pieces[!(side)]
 	#define king    board->pieces[side][KING]
 	#define castles board->castle[side]
+	#define state   board->state
 	debug_print("%s", "King position:");
 	debug_print_bitboard(king);
 	debug_print("ctz(king): %i", board_ctz64(king));
@@ -280,8 +281,8 @@ int board_moves(Board* board, BoardMove* head){
 	allies = flatten(board->pieces[side]);
 	bboard = allies | flatten(enemies);
 	pawn_bboard = bboard | board->target;
-	get_checkers(bboard, king, enemies, side, &checker, &checker_type);
-	if(checker_type == NO_CHECK){
+	state = get_checkers(bboard, king, enemies, side, &checker, &checker_type);
+	if(state == BOARD_NO_CHECK){
 		status = gen_castle_moves(bboard, king, enemies, castles, side, &tail);
 		if(status == BOARD_ERROR)
 			goto ERROR;
@@ -292,7 +293,7 @@ int board_moves(Board* board, BoardMove* head){
 	status = gen_king_moves(bboard, king, enemies, pmoves, side, &tail);
 	if(status == BOARD_ERROR)
 		goto ERROR;
-	if(checker_type != DOUBLE_CHECK)
+	if(state != BOARD_DOUBLE_CHECK)
 		for(int i = 0; i < KING; ++i){
 			FOR_BIT_IN_SET(sq, board->pieces[side][i]){
 				switch(i){
@@ -312,11 +313,7 @@ int board_moves(Board* board, BoardMove* head){
 		}
 	tail->next = NULL;
 	if(head == tail)
-		if(checker_type == NO_CHECK){
-			return BOARD_STALEMATE;
-		}else{
-			return BOARD_CHECKMATE;
-		}
+		state |= BOARD_STALEMATE;
 	return BOARD_SUCCESS;
 	ERROR:
 	board_moves_free(head->next);
@@ -326,6 +323,7 @@ int board_moves(Board* board, BoardMove* head){
 	#undef side
 	#undef enemies
 	#undef castles
+	#undef state
 }
 
 void board_moves_free(BoardMove* moves){
@@ -505,12 +503,13 @@ static void get_rook_sides(u64 king, u64 castles, u64* rooks){
 	}
 }
 
-static void get_checkers(
+static int get_checkers(
 	u64 bboard, u64 king, u64* enemies, int side,
 	u64* checker, int* checker_type
 ){
 	u64 threat, threats;
 	threats = EMPTYSET;
+	int state = BOARD_NO_CHECK;
 	*checker_type = NO_CHECK;
 	for(int i = 0; i < PIECES; ++i){
 		switch(i){
@@ -536,8 +535,17 @@ static void get_checkers(
 		}
 		threats |= threat;
 	}
-	if(board_pop64(threats) > 1)
-		*checker_type = DOUBLE_CHECK;
+	switch(board_pop64(threats)){
+	case 0:
+		break;
+	case 1:
+		state = BOARD_CHECK;
+		break;
+	default:
+		state = BOARD_DOUBLE_CHECK;
+		break;
+	}
+	return state;
 }
 
 static u64 is_castle_move(u64 from, u64 to, u64 castles){
