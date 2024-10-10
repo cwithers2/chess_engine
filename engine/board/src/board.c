@@ -10,8 +10,6 @@
 //SECTION CONSTANTS & MACROS
 #define FOR_BIT_IN_SET(BIT, SET) \
 for(u64 X=SET, BIT=X&-X; X; X&=(X-1), BIT=X&-X)
-#define DOUBLE_CHECK    11
-#define NO_CHECK        12
 
 #define QUEENSIDE       0
 #define KINGSIDE        1
@@ -510,7 +508,7 @@ static int get_checkers(
 	u64 threat, threats;
 	threats = EMPTYSET;
 	int state = BOARD_NO_CHECK;
-	*checker_type = NO_CHECK;
+	*checker_type = BOARD_NO_CHECK;
 	for(int i = 0; i < PIECES; ++i){
 		switch(i){
 		case QUEEN:
@@ -745,6 +743,12 @@ static int gen_piece_moves(
 	BoardMove** tail
 ){
 	switch(checker_type){
+	case BOARD_NO_CHECK:
+		//find moves that agree with any/all pins.
+		return gen_nopin_moves(
+			bboard, king, enemies, pmoves, side,
+			piece, piece_type, checker, checker_type,
+			tail);
 	case BISHOP:
 	case ROOK:
 		//we are checked, but we can block.
@@ -758,14 +762,6 @@ static int gen_piece_moves(
 		if(pmoves & checker)
 			return push_move(tail, piece, checker, piece_type, side);
 		return BOARD_SUCCESS;
-	case NO_CHECK:
-		//find moves that agree with any/all pins.
-		return gen_nopin_moves(
-			bboard, king, enemies, pmoves, side,
-			piece, piece_type, checker, checker_type,
-			tail);
-	case DOUBLE_CHECK:
-		//only king moves can avoid this.
 	case KING:
 		//this is not normal.
 	case QUEEN:
