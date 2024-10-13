@@ -2,6 +2,11 @@
 #define UTIL_H
 #include <stdint.h>
 
+enum STATUS{
+	BOARD_ERROR        = 0,
+	BOARD_SUCCESS      = 1,
+};
+
 enum FILES{
 	#define X(F, BITS, CHAR) FILE_##F = BITS,
 	#include "x/file.h"

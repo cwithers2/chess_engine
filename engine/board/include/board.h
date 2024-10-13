@@ -7,11 +7,6 @@ enum BOARD_MODE{
 	BOARD_MODE_960
 };
 
-enum STATUS{
-	BOARD_ERROR        = 0,
-	BOARD_SUCCESS      = 1,
-};
-
 enum STATE{
 	BOARD_NO_CHECK     = 0xF0,
 	BOARD_STALEMATE    = 0xF1,
