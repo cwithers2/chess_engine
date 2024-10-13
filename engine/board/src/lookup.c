@@ -237,7 +237,7 @@ static u64 battacks(int diag1, int diag2, u64 block){
 }
 
 static u64 find_magic(int shift, u64* blocks, u64* attacks, u64* table){
-	u64 magic, hashed, used[4096];
+	u64 magic, hashed;
 	int i, j, range, fail;
 	range = 1 << shift;
 	for(j = 0; j < 100000000; ++j){
