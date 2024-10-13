@@ -1,5 +1,5 @@
-#ifndef MAGIC_H
-#define MAGIC_H
+#ifndef LOOKUP_H
+#define LOOKUP_H
 #include "util.h"
 
 /*
