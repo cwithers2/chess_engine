@@ -328,7 +328,7 @@ int  board_lookup_init(){
 	//cleanup
 	free(blocks);
 	free(attacks);
-	return 1;
+	return BOARD_SUCCESS;
 	ABORT:
 	for(i = 0; i < 64; ++i){
 		free(rtable[i]);
@@ -336,7 +336,7 @@ int  board_lookup_init(){
 	}
 	free(blocks);
 	free(attacks);
-	return 0;
+	return BOARD_ERROR;
 }
 
 void board_lookup_destroy(){
