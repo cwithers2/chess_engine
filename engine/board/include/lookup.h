@@ -28,7 +28,7 @@ void board_lookup_destroy();
 		Any amount of bits denoting 'enemy' pieces.
 	int side:
 		The side of the piece: WHITE or BLACK.
-
+		NOTE: only used by pawn lookups.
 	Returns
 	-------
 	u64 bit board of moves and captures.
