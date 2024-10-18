@@ -2,9 +2,6 @@
 #define UTIL_H
 #include <stdint.h>
 
-#define FOR_BIT_IN_SET(BIT, SET) \
-for(u64 X=SET, BIT=X&-X; X; X&=(X-1), BIT=X&-X)
-
 enum STATUS{
 	BOARD_ERROR        = 0,
 	BOARD_SUCCESS      = 1,
