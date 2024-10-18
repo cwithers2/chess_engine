@@ -8,9 +8,6 @@
 #include <debug.h>
 
 //SECTION CONSTANTS & MACROS
-#define FOR_BIT_IN_SET(BIT, SET) \
-for(u64 X=SET, BIT=X&-X; X; X&=(X-1), BIT=X&-X)
-
 #define LOOKUP(T, P, B, S) board_lookup(T, P, B, S)
 
 #define QUEENSIDE       0
