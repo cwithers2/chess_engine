@@ -5,14 +5,14 @@
 
 //forward declare lookup functions
 #define LOOKUP_FUNC(TYPE) lookup ## TYPE
-#define X(TYPE)           static u64 LOOKUP_FUNC(TYPE)(u64, u64, int);
+#define X(TYPE, VALUE)    static u64 LOOKUP_FUNC(TYPE)(u64, u64, int);
 #include <x/piece.h>
 #undef X
 
 //create dispatch table
 typedef u64 (*lookup_func_t)(u64, u64, int);
 const lookup_func_t lookup_dispatch[] = {
-	#define X(TYPE) LOOKUP_FUNC(TYPE),
+	#define X(TYPE, VALUE) LOOKUP_FUNC(TYPE),
 	#include <x/piece.h>
 	#undef X
 };

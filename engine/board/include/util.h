@@ -26,7 +26,7 @@ enum SIDE_INDEX{
 	SIDES
 };
 enum PIECE_INDEX{
-	#define X(PIECE) PIECE,
+	#define X(PIECE, VALUE) PIECE,
 	#include "x/piece.h"
 	#undef X
 	PIECES
