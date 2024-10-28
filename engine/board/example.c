@@ -60,7 +60,7 @@ int main(int argc, char **argv){
 	while(1){
 		debug_print_board(&board);
 		eval = board_evaluate(&board);
-		printf("EVAL:   %i\n", eval);
+		printf("EVAL   : %f\n", eval/100.0);
 		status = board_moves(&board, &head);
 		if(status == BOARD_ERROR){
 			fprintf(stderr, "board moves returned non-zero: %i", status);
