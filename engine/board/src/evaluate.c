@@ -4,22 +4,22 @@
 #define FOR_BIT_IN_SET(BIT, SET) \
 for(u64 X=SET, BIT=X&-X; X; X&=(X-1), BIT=X&-X)
 
-const int checkmate_score[SIDES] = {INT_MAX, INT_MIN};
+static const int checkmate_score[SIDES] = {INT_MAX, INT_MIN};
 
-const int piece_value[] = {
+static const int piece_value[] = {
 	#define X(PIECE, VALUE) VALUE,
 	#include <x/piece.h>
 	#undef X
 };
 
-const u64 ranks[] = {
+static const u64 ranks[] = {
 	#define X(RANK, BITS, CHAR) BITS,
 	#include <x/rank.h>
 	#undef X
 };
 
 static int clrsb(int);
-static int evaluate(u64**, int);
+static int evaluate(u64[SIDES][PIECES]);
 
 int board_evaluate(Board* board){
 	#define side (board->active)
@@ -34,8 +34,8 @@ int board_evaluate(Board* board){
 	default:
 		break;
 	}
-	result  = evaluate((u64**)(board->pieces), WHITE);
-	result -= evaluate((u64**)(board->pieces), BLACK);
+	result  = evaluate(board->pieces);
+//	result -= evaluate(board->pieces, BLACK);
 	return result;
 	#undef side
 }
@@ -49,7 +49,7 @@ static int clrsb(int x){
 #endif
 }
 
-static int evaluate(u64** pieces, int side){
+static int evaluate(u64 pieces[SIDES][PIECES]){
 	int material, mobility, king_safety, space, coordination;
 	u64 bboard, sq, moves, allies, enemies, control, support;
 	material     = 0;
@@ -59,38 +59,49 @@ static int evaluate(u64** pieces, int side){
 	support = EMPTYSET;
 	//get bboard
 	for(int i = 0; i < PIECES; ++i){
-		allies  |= pieces[ side][i];
-		enemies |= pieces[!side][i];
+		allies  |= pieces[WHITE][i];
+		enemies |= pieces[BLACK][i];
 	}
 	bboard = allies | enemies;
 	//calc material
 	for(int i = 0; i < PIECES; ++i)
-		material += board_pop64(pieces[side][i]) * piece_value[i];
-	switch(side){
-	case WHITE:
-		for(int i = 0; i < 8; ++i){
-			u64 rank = (pieces[WHITE][PAWN] >> (8*i)) & ranks[0];
-			material += i * board_ctz64(rank);
-		}
-		break;
-	default:
-		for(int i = 7; i >= 0; --i){
-			u64 rank = (pieces[BLACK][PAWN] >> (8*i)) & ranks[0];
-			material += i * board_ctz64(rank);
-		}
+		material += (board_pop64(pieces[WHITE][i]) -
+		             board_pop64(pieces[BLACK][i])) * piece_value[i];
+	//calc pawn advancement advantage
+	for(int i = 0; i < 8; ++i){
+		u64 rank;
+		int psum;
+		rank  = pieces[WHITE][PAWN] & ranks[i];
+		psum  = board_pop64(rank);
+		rank  = pieces[BLACK][PAWN] & ranks[7-i];
+		psum -= board_pop64(rank);
+		material += psum * i * piece_value[PAWN];
 	}
 	//calc king safety
-	moves = board_lookup(KING, pieces[side][KING], bboard, side);
-	king_safety = board_pop64(moves & allies);
+	moves = board_lookup(KING, pieces[WHITE][KING], bboard, WHITE);
+	king_safety  = board_pop64(moves & allies);
+	moves = board_lookup(KING, pieces[BLACK][KING], bboard, BLACK);
+	king_safety -= board_pop64(moves & enemies);
 	//calc individual values
 	for(int i = 0; i < PIECES; ++i)
-		FOR_BIT_IN_SET(sq, pieces[side][i]){
-			moves = board_lookup(i, sq, bboard, side);
+		FOR_BIT_IN_SET(sq, pieces[WHITE][i]){
+			moves = board_lookup(i, sq, bboard, WHITE);
 			mobility += board_pop64(moves);
 			control  |= moves;
 			support  |= moves & allies;
 		}
 	space = clrsb(board_pop64(control));
 	coordination = board_pop64(support);
+	control = EMPTYSET;
+	support = EMPTYSET;
+	for(int i = 0; i < PIECES; ++i)
+		FOR_BIT_IN_SET(sq, pieces[BLACK][i]){
+			moves = board_lookup(i, sq, bboard, BLACK);
+			mobility -= board_pop64(moves);
+			control  |= moves;
+			support  |= moves & allies;
+		}
+	space -= clrsb(board_pop64(control));
+	coordination -= board_pop64(support);
 	return material + mobility + king_safety + space + coordination;
 }
