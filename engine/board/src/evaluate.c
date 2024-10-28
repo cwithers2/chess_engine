@@ -98,7 +98,7 @@ static int evaluate(u64 pieces[SIDES][PIECES]){
 			moves = board_lookup(i, sq, bboard, BLACK);
 			mobility -= board_pop64(moves);
 			control  |= moves;
-			support  |= moves & allies;
+			support  |= moves & enemies;
 		}
 	space -= clrsb(board_pop64(control));
 	coordination -= board_pop64(support);
