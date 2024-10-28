@@ -1,7 +1,7 @@
 //Piece   Value
-X(PAWN,   1)
-X(KNIGHT, 3)
-X(BISHOP, 3)
-X(ROOK,   5)
-X(QUEEN,  9)
+X(PAWN,   100)
+X(KNIGHT, 300)
+X(BISHOP, 300)
+X(ROOK,   500)
+X(QUEEN,  900)
 X(KING,   0)
