@@ -89,7 +89,7 @@ static int evaluate(u64 pieces[SIDES][PIECES]){
 			control  |= moves;
 			support  |= moves & allies;
 		}
-	space = clrsb(board_pop64(control));
+	space = 64-clrsb(board_pop64(control));
 	coordination = board_pop64(support);
 	control = EMPTYSET;
 	support = EMPTYSET;
@@ -100,7 +100,7 @@ static int evaluate(u64 pieces[SIDES][PIECES]){
 			control  |= moves;
 			support  |= moves & enemies;
 		}
-	space -= clrsb(board_pop64(control));
+	space -= 64-clrsb(board_pop64(control));
 	coordination -= board_pop64(support);
 	return material + mobility + king_safety + space + coordination;
 }
