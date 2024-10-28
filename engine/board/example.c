@@ -2,6 +2,7 @@
 #include <string.h>
 #include "include/board.h"
 #include "include/debug.h"
+#include "include/evaluate.h"
 
 void setup_new_board(Board*);
 void list_moves(BoardMove*);
@@ -47,6 +48,7 @@ void play_move(Board* board, BoardMove* moves){
 
 int main(int argc, char **argv){
 	int status;
+	int eval;
 	Board board;
 	BoardMove head;
 	printf("Initializing board library. Please wait.\n");
@@ -57,6 +59,8 @@ int main(int argc, char **argv){
 	setup_new_board(&board);
 	while(1){
 		debug_print_board(&board);
+		eval = board_evaluate(&board);
+		printf("EVAL:   %i\n", eval);
 		status = board_moves(&board, &head);
 		if(status == BOARD_ERROR){
 			fprintf(stderr, "board moves returned non-zero: %i", status);
