@@ -35,7 +35,6 @@ int board_evaluate(Board* board){
 		break;
 	}
 	result  = evaluate(board->pieces);
-//	result -= evaluate(board->pieces, BLACK);
 	return result;
 	#undef side
 }
